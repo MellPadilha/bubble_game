@@ -1,35 +1,17 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useRef } from 'react';
+import p5 from 'p5';
+import { createSketch } from './sketch';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const sketchRef = useRef();
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+  useEffect(() => {
+    const myP5 = new p5(createSketch, sketchRef.current);
+
+    return () => {
+      myP5.remove();
+    };
+  }, []);
+
+  return <div ref={sketchRef} id="sketch-container" />;
 }
-
-export default App

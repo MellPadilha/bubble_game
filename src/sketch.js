@@ -11,6 +11,9 @@ let fishes = [];
 let fishImages = [];
 let isMoving = false;
 
+let bubbles = [];
+let bubbleImage;
+
 export function createSketch(p) {
   p.setup = async () => {
     p.createCanvas(window.innerWidth, window.innerHeight);
@@ -29,6 +32,9 @@ export function createSketch(p) {
       '/peixe_vermelho.png'
     ];
     fishImages = await Promise.all(fishFilenames.map(filename => p.loadImage(filename)));
+
+    bubbleImage = await p.loadImage('/bubble.png');
+
   };
 
   p.draw = () => {
@@ -68,6 +74,12 @@ export function createSketch(p) {
         fishes.splice(i, 1);
       }
     }
+
+     // Spawn de bolhas (por exemplo, a cada 80 frames)
+     if (p.frameCount % 160 === 0) spawnBolha(p);
+
+     // Desenha e atualiza bolhas
+     atualizarBolhas(p);
   };
 
   p.keyPressed = () => {
@@ -90,4 +102,34 @@ export function createSketch(p) {
   p.windowResized = () => {
     p.resizeCanvas(window.innerWidth, window.innerHeight);
   };
+}
+
+function spawnBolha(p) {
+  const size = p.random(30, 50);
+  bubbles.push({
+    x: p.width,
+    y: p.random(20, p.height - 20),
+    speed: p.random(1, 3),
+    size,
+    img: bubbleImage
+  });
+}
+
+function desenharBolha(p, bolha) {
+  p.image(
+    bolha.img,
+    bolha.x,
+    bolha.y,
+    bolha.size,
+    bolha.size
+  );
+  bolha.x -= bolha.speed;
+}
+
+function atualizarBolhas(p) {
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i];
+    desenharBolha(p, b);
+    if (b.x < -b.size) bubbles.splice(i, 1);
+  }
 }

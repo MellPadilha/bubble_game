@@ -130,6 +130,24 @@ function atualizarBolhas(p) {
   for (let i = bubbles.length - 1; i >= 0; i--) {
     const b = bubbles[i];
     desenharBolha(p, b);
+
+    // Calcula os centros do personagem e da bolha
+    const charCenterX = characterX + 50; // personagem tem 100 de largura
+    const charCenterY = characterY + 50; // personagem tem 100 de altura
+    const bubbleCenterX = b.x + b.size / 2;
+    const bubbleCenterY = b.y + b.size / 2;
+
+    //Calcula a distância entre personagem e bolha
+    const distance = p.dist(charCenterX, charCenterY, bubbleCenterX, bubbleCenterY);
+
+    // Raio do personagem = 50 (metade de 100), raio da bolha = b.size/2
+    if (distance < 50 + b.size / 2) {
+      // Houve colisão, então remove a bolha
+      bubbles.splice(i, 1);
+      continue; 
+    }
+
+    // Remove bolhas que sairem da tela
     if (b.x < -b.size) bubbles.splice(i, 1);
   }
 }

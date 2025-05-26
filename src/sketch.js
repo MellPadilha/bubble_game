@@ -123,7 +123,7 @@ export function createSketch(p) {
     if (gameOver) {
       p.fill(255, 255, 255);
       p.textSize(64);
-      p.textAlign(p.CENTER, p.CENTER);w
+      p.textAlign(p.CENTER, p.CENTER);
     
       p.text('Game Over', p.width / 2, p.height / 2 - 40);
     
@@ -315,7 +315,7 @@ function resetGame(p) {
   // limpa tudo
   fishes = [];
   bubbles = [];
-  characterX = 50;w
+  characterX = 50;
   characterY = p.height / 2 - 50;
   gameOver = false;
   vidas = MAX_VIDAS; // ← resetando as vidas 

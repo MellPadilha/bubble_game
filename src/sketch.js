@@ -24,7 +24,15 @@ let bubbleImage;
 let bubblePopSound;
 
 let gameOverSound;
-let restartButton; 
+let restartButton;
+
+//Para animação de morte do personagem
+let dying       = false;
+let deathVy     = 0;
+let deathAngle  = 0;
+const DEATH_GRAVITY  = 0.5;
+const DEATH_ANG_VEL  = 0.15;
+
 
 export function createSketch(p) {
   p.setup = async () => {
@@ -61,6 +69,13 @@ export function createSketch(p) {
 
   p.draw = () => {
     p.clear();
+
+
+    //Se estiver morrendo, faz a animação de queda
+    if (dying) {
+      animateDeath(p);
+      return;
+    }
 
     if (gameOver) {
       p.fill(255, 255, 255);
@@ -166,8 +181,7 @@ function desenharEColidirPeixe(p, fish) {
   const rFish = Math.min(fishW, fishH) / 2;
 
   if (d < rChar + rFish) {
-    emitirSomGameOver();
-    gameOver = true;
+    startDeathAnimation();
   }
 }
 
@@ -250,4 +264,32 @@ function resetGame(p) {
   restartButton.hide();
   // recomeça o loop
   p.loop();
+}
+
+function startDeathAnimation() {
+  dying      = true;
+  deathVy    = -8;   // “pulo” inicial pra cima
+  deathAngle = 0;    // sem giro no início
+  // toca o som de morrer
+  emitirSomGameOver();
+}
+
+function animateDeath(p) {
+  // Física da queda
+  deathVy += DEATH_GRAVITY;
+  characterY += deathVy;
+  deathAngle += DEATH_ANG_VEL;
+
+  // Rotaciona personagem
+  p.push();
+  p.translate(characterX + 50, characterY + 50);
+  p.rotate(deathAngle);
+  p.image(characterImages[0], -50, -50, 100, 100);
+  p.pop();
+
+  // Quando acabar de cair faz o set de game over
+  if (characterY > p.height + 100) {
+    dying    = false;   // parar animação
+    gameOver = true;    // habilita tela de Game Over
+  }
 }

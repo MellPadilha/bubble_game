@@ -2,6 +2,7 @@ import parado from '/parado.png';
 import nadando1 from '/nadando_1.png';
 import nadando2 from '/nadando_2.png';
 import bubble_pop_sound from '/bubble_pop.mp3';
+import game_over_sound from '/game_over.wav';
 
 let character;
 let characterImages = [];
@@ -11,6 +12,7 @@ let characterY;
 let fishes = [];
 let fishImages = [];
 let isMoving = false;
+let gameOver = false;
 
 
 const MIN_BUBBLE_SIZE = 30;
@@ -20,6 +22,8 @@ const MAX_VOLUME = 1.0;
 let bubbles = [];
 let bubbleImage;
 let bubblePopSound;
+
+let gameOverSound;
 
 export function createSketch(p) {
   p.setup = async () => {
@@ -43,10 +47,19 @@ export function createSketch(p) {
     bubbleImage = await p.loadImage('/bubble.png');
 
     bubblePopSound = new Audio(bubble_pop_sound);
+    gameOverSound = new Audio(game_over_sound);
   };
 
   p.draw = () => {
     p.clear();
+
+    if (gameOver) {
+      p.fill(255, 0, 0);
+      p.textSize(64);
+      p.textAlign(p.CENTER, p.CENTER);
+      p.text('Game Over', p.width / 2, p.height / 2);
+      return;
+    }
 
     const frameDelay = 10; // Altere para ajustar a suavidade (quanto maior, mais lento)
 
@@ -75,8 +88,9 @@ export function createSketch(p) {
 
     for (let i = fishes.length - 1; i >= 0; i--) {
       const fish = fishes[i];
-      fish.x -= fish.speed;
-      p.image(fish.img, fish.x, fish.y, fish.size, fish.size / 1.5);
+      desenharEColidirPeixe(p, fish);
+      if (gameOver) break;
+
 
       if (fish.x < -fish.size) {
         fishes.splice(i, 1);
@@ -112,6 +126,34 @@ export function createSketch(p) {
   };
 }
 
+
+function desenharEColidirPeixe(p, fish) {
+  // tamanho desenhado
+  const fishW = fish.size;
+  const fishH = fish.size / 1.5;
+
+  const cxChar = characterX + 50;      // personagem 100×100 = raio 50
+  const cyChar = characterY + 50;
+  const cxFish = fish.x + fishW / 2;
+  const cyFish = fish.y + fishH / 2;
+
+  // desenha e move o peixe
+  p.image(fish.img, fish.x, fish.y, fishW, fishH);
+  fish.x -= fish.speed;
+
+  // calcula distância dos centros
+  const d = p.dist(cxChar, cyChar, cxFish, cyFish);
+
+  const rChar = 50;
+  const rFish = Math.min(fishW, fishH) / 2;
+
+  if (d < rChar + rFish) {
+    emitirSomGameOver();
+    gameOver = true;
+    p.noLoop();
+  }
+}
+
 function spawnBolha(p) {
   const size = p.random(MIN_BUBBLE_SIZE, MAX_BUBBLE_SIZE);
   bubbles.push({
@@ -135,8 +177,6 @@ function desenharBolha(p, bolha) {
 }
 
 function atualizarBolhas(p) {
- 
-
   for (let i = bubbles.length - 1; i >= 0; i--) {
     const b = bubbles[i];
     desenharBolha(p, b);
@@ -174,4 +214,9 @@ function emitirSomBolha(bubbleSize) {
   // reinicia e toca
   bubblePopSound.currentTime = 0;
   bubblePopSound.play();
+}
+
+function emitirSomGameOver(){
+  gameOverSound.currentTime = 0;
+  gameOverSound.play();
 }

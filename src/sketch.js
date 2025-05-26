@@ -1,6 +1,7 @@
 import parado from '/parado.png';
 import nadando1 from '/nadando_1.png';
 import nadando2 from '/nadando_2.png';
+import bubble_pop_sound from '/bubble_pop.mp3';
 
 let character;
 let characterImages = [];
@@ -11,8 +12,14 @@ let fishes = [];
 let fishImages = [];
 let isMoving = false;
 
+
+const MIN_BUBBLE_SIZE = 30;
+const MAX_BUBBLE_SIZE = 50;
+const MIN_VOLUME = 0.2;
+const MAX_VOLUME = 1.0;
 let bubbles = [];
 let bubbleImage;
+let bubblePopSound;
 
 export function createSketch(p) {
   p.setup = async () => {
@@ -35,6 +42,7 @@ export function createSketch(p) {
 
     bubbleImage = await p.loadImage('/bubble.png');
 
+    bubblePopSound = new Audio(bubble_pop_sound);
   };
 
   p.draw = () => {
@@ -105,7 +113,7 @@ export function createSketch(p) {
 }
 
 function spawnBolha(p) {
-  const size = p.random(30, 50);
+  const size = p.random(MIN_BUBBLE_SIZE, MAX_BUBBLE_SIZE);
   bubbles.push({
     x: p.width,
     y: p.random(20, p.height - 20),
@@ -127,6 +135,8 @@ function desenharBolha(p, bolha) {
 }
 
 function atualizarBolhas(p) {
+ 
+
   for (let i = bubbles.length - 1; i >= 0; i--) {
     const b = bubbles[i];
     desenharBolha(p, b);
@@ -144,10 +154,24 @@ function atualizarBolhas(p) {
     if (distance < 50 + b.size / 2) {
       // Houve colisão, então remove a bolha
       bubbles.splice(i, 1);
+      emitirSomBolha(b.size)
+
       continue; 
     }
 
     // Remove bolhas que sairem da tela
     if (b.x < -b.size) bubbles.splice(i, 1);
   }
+}
+
+function emitirSomBolha(bubbleSize) {
+  // normaliza tamanho entre 0 e 1
+  const t = (bubbleSize - MIN_BUBBLE_SIZE) / (MAX_BUBBLE_SIZE - MIN_BUBBLE_SIZE);
+  // mapeia para o intervalo de volume desejado
+  const vol = t * (MAX_VOLUME - MIN_VOLUME) + MIN_VOLUME;
+  // garante ficar entre 0.0 e 1.0
+  bubblePopSound.volume = Math.min(Math.max(vol, 0), 1);
+  // reinicia e toca
+  bubblePopSound.currentTime = 0;
+  bubblePopSound.play();
 }

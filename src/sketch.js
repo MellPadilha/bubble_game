@@ -3,6 +3,7 @@ import nadando1 from '/nadando_1.png';
 import nadando2 from '/nadando_2.png';
 import bubble_pop_sound from '/bubble_pop.mp3';
 import game_over_sound from '/game_over.wav';
+import seagulls_sound from '/seagulls_sound.wav';
 
 let character;
 let characterImages = [];
@@ -33,6 +34,8 @@ let deathAngle  = 0;
 const DEATH_GRAVITY  = 0.5;
 const DEATH_ANG_VEL  = 0.15;
 
+let nextSeagullFrame = 0;
+let seagullsSound;
 
 export function createSketch(p) {
   p.setup = async () => {
@@ -65,15 +68,26 @@ export function createSketch(p) {
     restartButton.mousePressed(() => resetGame(p));
     restartButton.hide();
 
+    seagullsSound = new Audio(seagulls_sound)
+    // agenda o primeiro som num intervalo entre 300 e 1000 frames
+    nextSeagullFrame = p.frameCount + p.int(p.random(300, 1000));
+
   };
 
   p.draw = () => {
     p.clear();
 
+     // checa se já passou do frame agendado
+    if (p.frameCount >= nextSeagullFrame) {
+      emitirSomGaivota();
+
+      // agenda o próximo em 300 a 1000 frames
+      nextSeagullFrame = p.frameCount + p.int(p.random(300, 1000));
+    }
 
     //Se estiver morrendo, faz a animação de queda
     if (dying) {
-      animateDeath(p);
+      animacaoMorte(p);
       return;
     }
 
@@ -181,7 +195,7 @@ function desenharEColidirPeixe(p, fish) {
   const rFish = Math.min(fishW, fishH) / 2;
 
   if (d < rChar + rFish) {
-    startDeathAnimation();
+    iniciaAnimacaoMorte();
   }
 }
 
@@ -266,7 +280,7 @@ function resetGame(p) {
   p.loop();
 }
 
-function startDeathAnimation() {
+function iniciaAnimacaoMorte() {
   dying      = true;
   deathVy    = -8;   // “pulo” inicial pra cima
   deathAngle = 0;    // sem giro no início
@@ -274,7 +288,7 @@ function startDeathAnimation() {
   emitirSomGameOver();
 }
 
-function animateDeath(p) {
+function animacaoMorte(p) {
   // Física da queda
   deathVy += DEATH_GRAVITY;
   characterY += deathVy;
@@ -292,4 +306,10 @@ function animateDeath(p) {
     dying    = false;   // parar animação
     gameOver = true;    // habilita tela de Game Over
   }
+}
+
+function emitirSomGaivota (){
+  seagullsSound.currentTime = 0;
+  seagullsSound.volume = 0.7
+  seagullsSound.play();
 }

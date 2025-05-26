@@ -24,6 +24,7 @@ let bubbleImage;
 let bubblePopSound;
 
 let gameOverSound;
+let restartButton; 
 
 export function createSketch(p) {
   p.setup = async () => {
@@ -48,16 +49,33 @@ export function createSketch(p) {
 
     bubblePopSound = new Audio(bubble_pop_sound);
     gameOverSound = new Audio(game_over_sound);
+
+    // cria o botão e esconde
+    restartButton = p.createButton('↻ Restart');
+    restartButton.position(20, 20);
+    restartButton.style('font-size', '18px');
+    restartButton.mousePressed(() => resetGame(p));
+    restartButton.hide();
+
   };
 
   p.draw = () => {
     p.clear();
 
     if (gameOver) {
-      p.fill(255, 0, 0);
+      p.fill(255, 255, 255);
       p.textSize(64);
       p.textAlign(p.CENTER, p.CENTER);
       p.text('Game Over', p.width / 2, p.height / 2);
+      
+      // mostra e centraliza o botão de restart
+      restartButton.show();
+      const bw = restartButton.elt.offsetWidth;
+      const bh = restartButton.elt.offsetHeight;
+      restartButton.position(
+        p.width/2 - bw/2,
+        (p.height/2 - bh/2) + 100
+      );
       return;
     }
 
@@ -150,7 +168,6 @@ function desenharEColidirPeixe(p, fish) {
   if (d < rChar + rFish) {
     emitirSomGameOver();
     gameOver = true;
-    p.noLoop();
   }
 }
 
@@ -218,5 +235,19 @@ function emitirSomBolha(bubbleSize) {
 
 function emitirSomGameOver(){
   gameOverSound.currentTime = 0;
+  gameOverSound.volume = 0.5
   gameOverSound.play();
+}
+
+function resetGame(p) {
+  // limpa tudo
+  fishes = [];
+  bubbles = [];
+  characterX = 50;
+  characterY = p.height / 2 - 50;
+  gameOver = false;
+  // esconde o botão
+  restartButton.hide();
+  // recomeça o loop
+  p.loop();
 }

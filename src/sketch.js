@@ -5,7 +5,7 @@ import bubble_pop_sound from '/bubble_pop.mp3';
 import game_over_sound from '/game_over.wav';
 import seagulls_sound from '/seagulls_sound.wav';
 import dano_sound from '/dano_sound.wav';
-
+import baleia from '/baleia.png';
 
 let character;
 let characterImages = [];
@@ -16,27 +16,42 @@ let fishes = [];
 let fishImages = [];
 let isMoving = false;
 let gameOver = false;
+let gameStarted = false;
 let vidas = 5;
 let piscarVidaFrames = 0;
 let audioContext;
 let danoBuffer;
 let pontuacao = 0;
-
-
+let whaleImage;
+let nextWhaleSpawn = 0;
+let whales = [];
+let paradoImg;
+let gameLogo;
 
 const MIN_BUBBLE_SIZE = 30;
 const MAX_BUBBLE_SIZE = 50;
 const MIN_VOLUME = 0.2;
 const MAX_VOLUME = 1.0;
 const MAX_VIDAS = 5;
+const BASE_FISH_SPEED_MIN = 2;
+const BASE_FISH_SPEED_MAX = 5;
+const SPEED_INCREASE_INTERVAL = 30;
+const SPEED_INCREASE_AMOUNT = 0.5;
+const WHALE_MIN_INTERVAL = 15;
+const WHALE_MAX_INTERVAL = 30;
+const WHALE_SIZE = 120;
+const WHALE_SPEED_MULTIPLIER = 0.8;
+
 let bubbles = [];
 let bubbleImage;
 let bubblePopSound;
+let lastSpeedIncreaseTime = 0;
+let currentSpeedMultiplier = 1;
 
 let gameOverSound;
 let restartButton;
+let startButton;
 
-//Para animação de morte do personagem
 let dying = false;
 let deathVy = 0;
 let deathAngle = 0;
@@ -56,11 +71,12 @@ export function createSketch(p) {
     const arrayBuffer = await response.arrayBuffer();
     danoBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-
-    // Load images asynchronously
+    paradoImg = await p.loadImage(parado);
     characterImages = await Promise.all([p.loadImage(nadando1), p.loadImage(nadando2)]);
-    character = await p.loadImage(parado);
+    character = paradoImg;
     characterY = p.height / 2 - 50;
+    whaleImage = await p.loadImage(baleia);
+    gameLogo = await p.loadImage('/game_logo.png');
 
     const fishFilenames = [
       '/peixe_azul.png',
@@ -76,7 +92,20 @@ export function createSketch(p) {
     bubblePopSound = new Audio(bubble_pop_sound);
     gameOverSound = new Audio(game_over_sound);
 
-    // cria o botão e esconde
+    startButton = p.createButton('Iniciar');
+    startButton.position(p.width / 2 - 50, p.height / 2 + 50);
+    startButton.style('background-color', '#0066cc');
+    startButton.style('color', 'white');
+    startButton.style('border', 'none');
+    startButton.style('padding', '15px 30px');
+    startButton.style('font-size', '20px');
+    startButton.style('border-radius', '5px');
+    startButton.style('cursor', 'pointer');
+    startButton.mousePressed(() => {
+      gameStarted = true;
+      startButton.hide();
+    });
+
     restartButton = p.createButton('↻ Restart');
     restartButton.position(20, 20);
     restartButton.style('font-size', '18px');
@@ -84,37 +113,42 @@ export function createSketch(p) {
     restartButton.hide();
 
     seagullsSound = new Audio(seagulls_sound)
-    // agenda o primeiro som num intervalo entre 300 e 1000 frames
     nextSeagullFrame = p.frameCount + p.int(p.random(300, 1000));
+    lastSpeedIncreaseTime = p.millis();
 
+    nextWhaleSpawn = p.frameCount + p.int(p.random(WHALE_MIN_INTERVAL, WHALE_MAX_INTERVAL) * 60);
   };
 
   p.draw = () => {
     p.clear();
-    // Exibir vidas restantes
+    
+    if (!gameStarted) {
+      const logoWidth = 300;
+      const logoHeight = 300;
+      p.image(gameLogo, p.width / 2 - logoWidth / 2, p.height / 2 - logoHeight - 30, logoWidth, logoHeight);
+      
+      p.image(character, characterX, characterY, 100, 100);
+      return;
+    }
+
     p.textSize(24);
     p.textAlign(p.LEFT, p.TOP);
     
-    // Pisca em vermelho claro se levou dano
     if (piscarVidaFrames > 0) {
       const alpha = p.map(piscarVidaFrames, 0, 15, 0, 255);
-      p.fill(255, 100, 100, alpha); // vermelho claro com opacidade
+      p.fill(255, 100, 100, alpha);
       piscarVidaFrames--;
     } else {
-      p.fill(255); // branco normal
+      p.fill(255);
     }
     
-    p.text(`❤️ ${vidas} + Lifes   |   💠 ${pontuacao} + Points`, 20, 20);
+    p.text(`❤️ ${vidas} + Lifes   |   🫧 ${pontuacao} + Points`, 20, 20);
 
-    // checa se já passou do frame agendado
     if (p.frameCount >= nextSeagullFrame) {
       emitirSomGaivota();
-
-      // agenda o próximo em 300 a 1000 frames
       nextSeagullFrame = p.frameCount + p.int(p.random(300, 1000));
     }
 
-    //Se estiver morrendo, faz a animação de queda
     if (dying) {
       animacaoMorte(p);
       return;
@@ -129,9 +163,8 @@ export function createSketch(p) {
     
       p.textSize(32);
       p.fill(255);
-      p.text(`💠 Bolhas coletadas: ${pontuacao}`, p.width / 2, p.height / 2 + 20);
+      p.text(`🫧 Bolhas coletadas: ${pontuacao}`, p.width / 2, p.height / 2 + 20);
     
-      // mostra e centraliza o botão de restart
       restartButton.show();
       const bw = restartButton.elt.offsetWidth;
       const bh = restartButton.elt.offsetHeight;
@@ -141,19 +174,14 @@ export function createSketch(p) {
       );
       return;
     }
-    
 
-    const frameDelay = 10; // Altere para ajustar a suavidade (quanto maior, mais lento)
+    const frameDelay = 10;
 
-    if (isMoving) {
-      if (p.frameCount % frameDelay === 0) {
-        characterIndex = (characterIndex + 1) % characterImages.length;
-      }
+    if (p.frameCount % frameDelay === 0) {
+      characterIndex = (characterIndex + 1) % characterImages.length;
       character = characterImages[characterIndex];
-    } else {
-      character = characterImages[0];
     }
-    // Personagem parado ou em movimento
+
     p.image(character, characterX, characterY, 100, 100);
 
     if (p.frameCount % 60 === 0) {
@@ -161,11 +189,17 @@ export function createSketch(p) {
       const newFish = {
         x: p.width,
         y: p.random(50, p.height - 50),
-        speed: p.random(2, 5),
+        speed: p.random(BASE_FISH_SPEED_MIN, BASE_FISH_SPEED_MAX) * currentSpeedMultiplier,
         size: p.random(30, 60),
         img: randomImage
       };
       fishes.push(newFish);
+    }
+
+    const currentTime = p.millis();
+    if (currentTime - lastSpeedIncreaseTime >= SPEED_INCREASE_INTERVAL * 1000) {
+      currentSpeedMultiplier += SPEED_INCREASE_AMOUNT;
+      lastSpeedIncreaseTime = currentTime;
     }
 
     for (let i = fishes.length - 1; i >= 0; i--) {
@@ -173,21 +207,45 @@ export function createSketch(p) {
       desenharEColidirPeixe(p, fish);
       if (gameOver) break;
 
-
       if (fish.x < -fish.size) {
         fishes.splice(i, 1);
       }
     }
 
-    // Spawn de bolhas (por exemplo, a cada 80 frames)
     if (p.frameCount % 160 === 0) spawnBolha(p);
 
-    // Desenha e atualiza bolhas
     atualizarBolhas(p);
+
+    if (p.frameCount >= nextWhaleSpawn) {
+      const newWhale = {
+        x: p.width,
+        y: p.random(50, p.height - 50),
+        speed: p.random(BASE_FISH_SPEED_MIN, BASE_FISH_SPEED_MAX) * currentSpeedMultiplier * WHALE_SPEED_MULTIPLIER,
+        size: WHALE_SIZE
+      };
+      whales.push(newWhale);
+      nextWhaleSpawn = p.frameCount + p.int(p.random(WHALE_MIN_INTERVAL, WHALE_MAX_INTERVAL) * 60);
+    }
+
+    for (let i = whales.length - 1; i >= 0; i--) {
+      const whale = whales[i];
+      desenharEColidirBaleia(p, whale);
+      if (gameOver) break;
+
+      if (whale.x < -whale.size) {
+        whales.splice(i, 1);
+      }
+    }
   };
 
   p.keyPressed = () => {
-    isMoving = true;
+    if (!gameStarted || gameOver) return;
+    
+    if (!isMoving) {
+      isMoving = true;
+      character = characterImages[0];
+    }
+    
     if (p.key === 'w') {
       characterY -= 5;
     } else if (p.key === 's') {
@@ -208,33 +266,29 @@ export function createSketch(p) {
   };
 }
 
-
 function desenharEColidirPeixe(p, fish) {
-  // tamanho desenhado
   const fishW = fish.size;
   const fishH = fish.size / 1.5;
 
-  const cxChar = characterX + 50;      // personagem 100×100 = raio 50
+  const cxChar = characterX + 50;
   const cyChar = characterY + 50;
   const cxFish = fish.x + fishW / 2;
   const cyFish = fish.y + fishH / 2;
 
-  // desenha e move o peixe
   p.image(fish.img, fish.x, fish.y, fishW, fishH);
   fish.x -= fish.speed;
 
-  // calcula distância dos centros
   const d = p.dist(cxChar, cyChar, cxFish, cyFish);
 
   const rChar = 50;
   const rFish = Math.min(fishW, fishH) / 2;
 
   if (d < rChar + rFish) {
-    fishes.splice(fishes.indexOf(fish), 1); // remove peixe colidido
+    fishes.splice(fishes.indexOf(fish), 1);
     vidas--;
     emitirSomDano();
 
-    piscarVidaFrames = 15; // ativa piscada rápida
+    piscarVidaFrames = 15;
     
     if (vidas <= 0) {
       iniciaAnimacaoMorte();
@@ -269,38 +323,29 @@ function atualizarBolhas(p) {
     const b = bubbles[i];
     desenharBolha(p, b);
 
-    // Calcula os centros do personagem e da bolha
-    const charCenterX = characterX + 50; // personagem tem 100 de largura
-    const charCenterY = characterY + 50; // personagem tem 100 de altura
+    const charCenterX = characterX + 50;
+    const charCenterY = characterY + 50;
     const bubbleCenterX = b.x + b.size / 2;
     const bubbleCenterY = b.y + b.size / 2;
 
-    //Calcula a distância entre personagem e bolha
     const distance = p.dist(charCenterX, charCenterY, bubbleCenterX, bubbleCenterY);
 
-    // Raio do personagem = 50 (metade de 100), raio da bolha = b.size/2
     if (distance < 50 + b.size / 2) {
-      // Houve colisão, então remove a bolha
       bubbles.splice(i, 1);
       emitirSomBolha(b.size)
-      pontuacao++; // incrementa pontos ao pegar bolha
+      pontuacao++;
 
       continue;
     }
 
-    // Remove bolhas que sairem da tela
     if (b.x < -b.size) bubbles.splice(i, 1);
   }
 }
 
 function emitirSomBolha(bubbleSize) {
-  // normaliza tamanho entre 0 e 1
   const t = (bubbleSize - MIN_BUBBLE_SIZE) / (MAX_BUBBLE_SIZE - MIN_BUBBLE_SIZE);
-  // mapeia para o intervalo de volume desejado
   const vol = t * (MAX_VOLUME - MIN_VOLUME) + MIN_VOLUME;
-  // garante ficar entre 0.0 e 1.0
   bubblePopSound.volume = Math.min(Math.max(vol, 0), 1);
-  // reinicia e toca
   bubblePopSound.currentTime = 0;
   bubblePopSound.play();
 }
@@ -312,43 +357,46 @@ function emitirSomGameOver() {
 }
 
 function resetGame(p) {
-  // limpa tudo
   fishes = [];
   bubbles = [];
+  whales = [];
   characterX = 50;
   characterY = p.height / 2 - 50;
   gameOver = false;
-  vidas = MAX_VIDAS; // ← resetando as vidas 
+  gameStarted = false;
+  isMoving = false;
+  character = paradoImg;
+  vidas = MAX_VIDAS;
   pontuacao = 0;
+  currentSpeedMultiplier = 1;
+  lastSpeedIncreaseTime = p.millis();
+  nextWhaleSpawn = p.frameCount + p.int(p.random(WHALE_MIN_INTERVAL, WHALE_MAX_INTERVAL) * 60);
   restartButton.hide();
+  startButton.show();
   p.loop();
 }
 
 function iniciaAnimacaoMorte() {
   dying = true;
-  deathVy = -8;   // “pulo” inicial pra cima
-  deathAngle = 0;    // sem giro no início
-  // toca o som de morrer
+  deathVy = -8;
+  deathAngle = 0;
   emitirSomGameOver();
 }
 
 function animacaoMorte(p) {
-  // Física da queda
   deathVy += DEATH_GRAVITY;
   characterY += deathVy;
   deathAngle += DEATH_ANG_VEL;
 
-  // Rotaciona personagem
   p.push();
   p.translate(characterX + 50, characterY + 50);
   p.rotate(deathAngle);
   p.image(characterImages[0], -50, -50, 100, 100);
   p.pop();
 
-  // Quando acabar de cair faz o set de game over
   if (characterY > p.height + 100) {
-    dying = false;   // parar animação
-    gameOver = true;    // habilita tela de Game Over
+    dying = false;
+    gameOver = true;
   }
 }
 
@@ -364,8 +412,36 @@ function emitirSomDano() {
   const source = audioContext.createBufferSource();
   source.buffer = danoBuffer;
   const gain = audioContext.createGain();
-  gain.gain.value = 0.5; // volume
+  gain.gain.value = 0.5;
   source.connect(gain);
   gain.connect(audioContext.destination);
   source.start(0);
+}
+
+function desenharEColidirBaleia(p, whale) {
+  const whaleW = whale.size * 2;
+  const whaleH = whale.size;
+
+  const cxChar = characterX + 50;
+  const cyChar = characterY + 50;
+  const cxWhale = whale.x + whaleW / 2;
+  const cyWhale = whale.y + whaleH / 2;
+
+  p.image(whaleImage, whale.x, whale.y, whaleW, whaleH);
+  whale.x -= whale.speed;
+
+  const d = p.dist(cxChar, cyChar, cxWhale, cyWhale);
+  const rChar = 50;
+  const rWhale = Math.min(whaleW, whaleH) / 2;
+
+  if (d < rChar + rWhale) {
+    whales.splice(whales.indexOf(whale), 1);
+    vidas -= 2;
+    emitirSomDano();
+    piscarVidaFrames = 15;
+    
+    if (vidas <= 0) {
+      iniciaAnimacaoMorte();
+    }
+  }
 }

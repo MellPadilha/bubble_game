@@ -1,6 +1,11 @@
 import parado from '/parado.png';
 import nadando1 from '/nadando_1.png';
 import nadando2 from '/nadando_2.png';
+import bubble_pop_sound from '/bubble_pop.mp3';
+import game_over_sound from '/game_over.wav';
+import seagulls_sound from '/seagulls_sound.wav';
+import dano_sound from '/dano_sound.wav';
+
 
 let character;
 let characterImages = [];
@@ -10,11 +15,47 @@ let characterY;
 let fishes = [];
 let fishImages = [];
 let isMoving = false;
+let gameOver = false;
+let vidas = 5;
+let piscarVidaFrames = 0;
+let audioContext;
+let danoBuffer;
+let pontuacao = 0;
+
+
+
+const MIN_BUBBLE_SIZE = 30;
+const MAX_BUBBLE_SIZE = 50;
+const MIN_VOLUME = 0.2;
+const MAX_VOLUME = 1.0;
+const MAX_VIDAS = 5;
+let bubbles = [];
+let bubbleImage;
+let bubblePopSound;
+
+let gameOverSound;
+let restartButton;
+
+//Para animação de morte do personagem
+let dying = false;
+let deathVy = 0;
+let deathAngle = 0;
+const DEATH_GRAVITY = 0.5;
+const DEATH_ANG_VEL = 0.15;
+
+let nextSeagullFrame = 0;
+let seagullsSound;
 
 export function createSketch(p) {
   p.setup = async () => {
     p.createCanvas(window.innerWidth, window.innerHeight);
     p.frameRate(60);
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    const response = await fetch(dano_sound);
+    const arrayBuffer = await response.arrayBuffer();
+    danoBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
 
     // Load images asynchronously
     characterImages = await Promise.all([p.loadImage(nadando1), p.loadImage(nadando2)]);
@@ -29,10 +70,78 @@ export function createSketch(p) {
       '/peixe_vermelho.png'
     ];
     fishImages = await Promise.all(fishFilenames.map(filename => p.loadImage(filename)));
+
+    bubbleImage = await p.loadImage('/bubble.png');
+
+    bubblePopSound = new Audio(bubble_pop_sound);
+    gameOverSound = new Audio(game_over_sound);
+
+    // cria o botão e esconde
+    restartButton = p.createButton('↻ Restart');
+    restartButton.position(20, 20);
+    restartButton.style('font-size', '18px');
+    restartButton.mousePressed(() => resetGame(p));
+    restartButton.hide();
+
+    seagullsSound = new Audio(seagulls_sound)
+    // agenda o primeiro som num intervalo entre 300 e 1000 frames
+    nextSeagullFrame = p.frameCount + p.int(p.random(300, 1000));
+
   };
 
   p.draw = () => {
     p.clear();
+    // Exibir vidas restantes
+    p.textSize(24);
+    p.textAlign(p.LEFT, p.TOP);
+    
+    // Pisca em vermelho claro se levou dano
+    if (piscarVidaFrames > 0) {
+      const alpha = p.map(piscarVidaFrames, 0, 15, 0, 255);
+      p.fill(255, 100, 100, alpha); // vermelho claro com opacidade
+      piscarVidaFrames--;
+    } else {
+      p.fill(255); // branco normal
+    }
+    
+    p.text(`❤️ ${vidas} + Lifes   |   💠 ${pontuacao} + Points`, 20, 20);
+
+    // checa se já passou do frame agendado
+    if (p.frameCount >= nextSeagullFrame) {
+      emitirSomGaivota();
+
+      // agenda o próximo em 300 a 1000 frames
+      nextSeagullFrame = p.frameCount + p.int(p.random(300, 1000));
+    }
+
+    //Se estiver morrendo, faz a animação de queda
+    if (dying) {
+      animacaoMorte(p);
+      return;
+    }
+
+    if (gameOver) {
+      p.fill(255, 255, 255);
+      p.textSize(64);
+      p.textAlign(p.CENTER, p.CENTER);
+    
+      p.text('Game Over', p.width / 2, p.height / 2 - 40);
+    
+      p.textSize(32);
+      p.fill(255);
+      p.text(`💠 Bolhas coletadas: ${pontuacao}`, p.width / 2, p.height / 2 + 20);
+    
+      // mostra e centraliza o botão de restart
+      restartButton.show();
+      const bw = restartButton.elt.offsetWidth;
+      const bh = restartButton.elt.offsetHeight;
+      restartButton.position(
+        p.width / 2 - bw / 2,
+        (p.height / 2 - bh / 2) + 100
+      );
+      return;
+    }
+    
 
     const frameDelay = 10; // Altere para ajustar a suavidade (quanto maior, mais lento)
 
@@ -61,13 +170,20 @@ export function createSketch(p) {
 
     for (let i = fishes.length - 1; i >= 0; i--) {
       const fish = fishes[i];
-      fish.x -= fish.speed;
-      p.image(fish.img, fish.x, fish.y, fish.size, fish.size / 1.5);
+      desenharEColidirPeixe(p, fish);
+      if (gameOver) break;
+
 
       if (fish.x < -fish.size) {
         fishes.splice(i, 1);
       }
     }
+
+    // Spawn de bolhas (por exemplo, a cada 80 frames)
+    if (p.frameCount % 160 === 0) spawnBolha(p);
+
+    // Desenha e atualiza bolhas
+    atualizarBolhas(p);
   };
 
   p.keyPressed = () => {
@@ -90,4 +206,166 @@ export function createSketch(p) {
   p.windowResized = () => {
     p.resizeCanvas(window.innerWidth, window.innerHeight);
   };
+}
+
+
+function desenharEColidirPeixe(p, fish) {
+  // tamanho desenhado
+  const fishW = fish.size;
+  const fishH = fish.size / 1.5;
+
+  const cxChar = characterX + 50;      // personagem 100×100 = raio 50
+  const cyChar = characterY + 50;
+  const cxFish = fish.x + fishW / 2;
+  const cyFish = fish.y + fishH / 2;
+
+  // desenha e move o peixe
+  p.image(fish.img, fish.x, fish.y, fishW, fishH);
+  fish.x -= fish.speed;
+
+  // calcula distância dos centros
+  const d = p.dist(cxChar, cyChar, cxFish, cyFish);
+
+  const rChar = 50;
+  const rFish = Math.min(fishW, fishH) / 2;
+
+  if (d < rChar + rFish) {
+    fishes.splice(fishes.indexOf(fish), 1); // remove peixe colidido
+    vidas--;
+    emitirSomDano();
+
+    piscarVidaFrames = 15; // ativa piscada rápida
+    
+    if (vidas <= 0) {
+      iniciaAnimacaoMorte();
+    }
+  }
+}
+
+function spawnBolha(p) {
+  const size = p.random(MIN_BUBBLE_SIZE, MAX_BUBBLE_SIZE);
+  bubbles.push({
+    x: p.width,
+    y: p.random(20, p.height - 20),
+    speed: p.random(1, 3),
+    size,
+    img: bubbleImage
+  });
+}
+
+function desenharBolha(p, bolha) {
+  p.image(
+    bolha.img,
+    bolha.x,
+    bolha.y,
+    bolha.size,
+    bolha.size
+  );
+  bolha.x -= bolha.speed;
+}
+
+function atualizarBolhas(p) {
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i];
+    desenharBolha(p, b);
+
+    // Calcula os centros do personagem e da bolha
+    const charCenterX = characterX + 50; // personagem tem 100 de largura
+    const charCenterY = characterY + 50; // personagem tem 100 de altura
+    const bubbleCenterX = b.x + b.size / 2;
+    const bubbleCenterY = b.y + b.size / 2;
+
+    //Calcula a distância entre personagem e bolha
+    const distance = p.dist(charCenterX, charCenterY, bubbleCenterX, bubbleCenterY);
+
+    // Raio do personagem = 50 (metade de 100), raio da bolha = b.size/2
+    if (distance < 50 + b.size / 2) {
+      // Houve colisão, então remove a bolha
+      bubbles.splice(i, 1);
+      emitirSomBolha(b.size)
+      pontuacao++; // incrementa pontos ao pegar bolha
+
+      continue;
+    }
+
+    // Remove bolhas que sairem da tela
+    if (b.x < -b.size) bubbles.splice(i, 1);
+  }
+}
+
+function emitirSomBolha(bubbleSize) {
+  // normaliza tamanho entre 0 e 1
+  const t = (bubbleSize - MIN_BUBBLE_SIZE) / (MAX_BUBBLE_SIZE - MIN_BUBBLE_SIZE);
+  // mapeia para o intervalo de volume desejado
+  const vol = t * (MAX_VOLUME - MIN_VOLUME) + MIN_VOLUME;
+  // garante ficar entre 0.0 e 1.0
+  bubblePopSound.volume = Math.min(Math.max(vol, 0), 1);
+  // reinicia e toca
+  bubblePopSound.currentTime = 0;
+  bubblePopSound.play();
+}
+
+function emitirSomGameOver() {
+  gameOverSound.currentTime = 0;
+  gameOverSound.volume = 0.5
+  gameOverSound.play();
+}
+
+function resetGame(p) {
+  // limpa tudo
+  fishes = [];
+  bubbles = [];
+  characterX = 50;
+  characterY = p.height / 2 - 50;
+  gameOver = false;
+  vidas = MAX_VIDAS; // ← resetando as vidas 
+  pontuacao = 0;
+  restartButton.hide();
+  p.loop();
+}
+
+function iniciaAnimacaoMorte() {
+  dying = true;
+  deathVy = -8;   // “pulo” inicial pra cima
+  deathAngle = 0;    // sem giro no início
+  // toca o som de morrer
+  emitirSomGameOver();
+}
+
+function animacaoMorte(p) {
+  // Física da queda
+  deathVy += DEATH_GRAVITY;
+  characterY += deathVy;
+  deathAngle += DEATH_ANG_VEL;
+
+  // Rotaciona personagem
+  p.push();
+  p.translate(characterX + 50, characterY + 50);
+  p.rotate(deathAngle);
+  p.image(characterImages[0], -50, -50, 100, 100);
+  p.pop();
+
+  // Quando acabar de cair faz o set de game over
+  if (characterY > p.height + 100) {
+    dying = false;   // parar animação
+    gameOver = true;    // habilita tela de Game Over
+  }
+}
+
+function emitirSomGaivota() {
+  seagullsSound.currentTime = 0;
+  seagullsSound.volume = 0.7
+  seagullsSound.play();
+}
+
+function emitirSomDano() {
+  if (!audioContext || !danoBuffer) return;
+
+  const source = audioContext.createBufferSource();
+  source.buffer = danoBuffer;
+  const gain = audioContext.createGain();
+  gain.gain.value = 0.5; // volume
+  source.connect(gain);
+  gain.connect(audioContext.destination);
+  source.start(0);
 }

@@ -27,16 +27,17 @@ let nextWhaleSpawn = 0;
 let whales = [];
 let paradoImg;
 let gameLogo;
+let characterSpeed = 5;
+const SPEED_INCREASE_INTERVAL = 30;
+const SPEED_INCREASE_AMOUNT = 1;
 
 const MIN_BUBBLE_SIZE = 30;
 const MAX_BUBBLE_SIZE = 50;
 const MIN_VOLUME = 0.2;
 const MAX_VOLUME = 1.0;
 const MAX_VIDAS = 5;
-const BASE_FISH_SPEED_MIN = 2;
-const BASE_FISH_SPEED_MAX = 5;
-const SPEED_INCREASE_INTERVAL = 30;
-const SPEED_INCREASE_AMOUNT = 0.5;
+const BASE_FISH_SPEED_MIN = 1;
+const BASE_FISH_SPEED_MAX = 2.5;
 const WHALE_MIN_INTERVAL = 15;
 const WHALE_MAX_INTERVAL = 30;
 const WHALE_SIZE = 120;
@@ -60,6 +61,13 @@ const DEATH_ANG_VEL = 0.15;
 
 let nextSeagullFrame = 0;
 let seagullsSound;
+
+let menuBubbles = [];
+const MENU_BUBBLE_SPAWN_RATE = 30;
+const BURST_BUBBLE_COUNT = 30;
+
+let gameStartTime = 0;
+const INITIAL_SPAWN_DELAY = 3000; // 3 segundos de delay
 
 export function createSketch(p) {
   p.setup = async () => {
@@ -102,13 +110,24 @@ export function createSketch(p) {
     startButton.style('border-radius', '5px');
     startButton.style('cursor', 'pointer');
     startButton.mousePressed(() => {
-      gameStarted = true;
-      startButton.hide();
+      createBurstEffect(p);
+      setTimeout(() => {
+        gameStarted = true;
+        gameStartTime = p.millis();
+        startButton.hide();
+        menuBubbles = [];
+      }, 1000);
     });
 
     restartButton = p.createButton('↻ Restart');
     restartButton.position(20, 20);
-    restartButton.style('font-size', '18px');
+    restartButton.style('background-color', '#0066cc');
+    restartButton.style('color', 'white');
+    restartButton.style('border', 'none');
+    restartButton.style('padding', '15px 30px');
+    restartButton.style('font-size', '20px');
+    restartButton.style('border-radius', '5px');
+    restartButton.style('cursor', 'pointer');
     restartButton.mousePressed(() => resetGame(p));
     restartButton.hide();
 
@@ -123,10 +142,15 @@ export function createSketch(p) {
     p.clear();
     
     if (!gameStarted) {
-      const logoWidth = 300;
-      const logoHeight = 300;
-      p.image(gameLogo, p.width / 2 - logoWidth / 2, p.height / 2 - logoHeight - 30, logoWidth, logoHeight);
+      const logoWidth = 500;
+      const logoHeight = 500;
+      p.image(gameLogo, p.width / 2 - logoWidth / 2, p.height / 2 - logoHeight + 50, logoWidth, logoHeight);
       
+      if (p.frameCount % MENU_BUBBLE_SPAWN_RATE === 0) {
+        spawnMenuBubble(p);
+      }
+      
+      updateMenuBubbles(p);
       p.image(character, characterX, characterY, 100, 100);
       return;
     }
@@ -184,7 +208,7 @@ export function createSketch(p) {
 
     p.image(character, characterX, characterY, 100, 100);
 
-    if (p.frameCount % 60 === 0) {
+    if (p.frameCount % 60 === 0 && p.millis() - gameStartTime > INITIAL_SPAWN_DELAY) {
       const randomImage = fishImages[Math.floor(p.random(fishImages.length))];
       const newFish = {
         x: p.width,
@@ -247,13 +271,13 @@ export function createSketch(p) {
     }
     
     if (p.key === 'w') {
-      characterY -= 5;
+      characterY -= characterSpeed;
     } else if (p.key === 's') {
-      characterY += 5;
+      characterY += characterSpeed;
     } else if (p.key === 'a') {
-      characterX -= 5;
+      characterX -= characterSpeed;
     } else if (p.key === 'd') {
-      characterX += 5;
+      characterX += characterSpeed;
     }
   };
 
@@ -335,6 +359,10 @@ function atualizarBolhas(p) {
       emitirSomBolha(b.size)
       pontuacao++;
 
+      if (pontuacao > 0 && pontuacao % SPEED_INCREASE_INTERVAL === 0) {
+        characterSpeed += SPEED_INCREASE_AMOUNT;
+      }
+
       continue;
     }
 
@@ -362,6 +390,7 @@ function resetGame(p) {
   whales = [];
   characterX = 50;
   characterY = p.height / 2 - 50;
+  characterSpeed = 5;
   gameOver = false;
   gameStarted = false;
   isMoving = false;
@@ -374,6 +403,8 @@ function resetGame(p) {
   restartButton.hide();
   startButton.show();
   p.loop();
+  menuBubbles = [];
+  gameStartTime = p.millis();
 }
 
 function iniciaAnimacaoMorte() {
@@ -443,5 +474,45 @@ function desenharEColidirBaleia(p, whale) {
     if (vidas <= 0) {
       iniciaAnimacaoMorte();
     }
+  }
+}
+
+function spawnMenuBubble(p, fromBottom = true) {
+  const size = p.random(MIN_BUBBLE_SIZE, MAX_BUBBLE_SIZE);
+  const x = p.random(0, p.width);
+  const y = fromBottom ? p.height + size : p.random(p.height, p.height + 100);
+  const speedY = p.random(2, 5);
+  
+  menuBubbles.push({
+    x,
+    y,
+    size,
+    speedY,
+    img: bubbleImage,
+    rotation: p.random(0, p.TWO_PI)
+  });
+}
+
+function updateMenuBubbles(p) {
+  for (let i = menuBubbles.length - 1; i >= 0; i--) {
+    const bubble = menuBubbles[i];
+    bubble.y -= bubble.speedY;
+    bubble.rotation += 0.02;
+    
+    p.push();
+    p.translate(bubble.x, bubble.y);
+    p.rotate(bubble.rotation);
+    p.image(bubble.img, -bubble.size/2, -bubble.size/2, bubble.size, bubble.size);
+    p.pop();
+    
+    if (bubble.y < -bubble.size) {
+      menuBubbles.splice(i, 1);
+    }
+  }
+}
+
+function createBurstEffect(p) {
+  for (let i = 0; i < BURST_BUBBLE_COUNT; i++) {
+    spawnMenuBubble(p, false);
   }
 }

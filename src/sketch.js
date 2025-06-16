@@ -9,9 +9,9 @@ import dano_sound from '/dano_sound.wav';
 
 let character;
 let characterImages = [];
+let characterPos;
+let characterVel;
 let characterIndex = 0;
-let characterX = 50;
-let characterY;
 let fishes = [];
 let fishImages = [];
 let isMoving = false;
@@ -38,8 +38,9 @@ let restartButton;
 
 //Para animação de morte do personagem
 let dying = false;
-let deathVy = 0;
-let deathAngle = 0;
+let deathVel;    // p5.Vector para velocidade de queda
+let deathAcc;    // p5.Vector para aceleração (gravidade)
+let deathAngle;
 const DEATH_GRAVITY = 0.5;
 const DEATH_ANG_VEL = 0.15;
 
@@ -60,7 +61,11 @@ export function createSketch(p) {
     // Load images asynchronously
     characterImages = await Promise.all([p.loadImage(nadando1), p.loadImage(nadando2)]);
     character = await p.loadImage(parado);
-    characterY = p.height / 2 - 50;
+    characterPos = p.createVector(50, p.height/2 - 50);
+    characterVel = p.createVector(0, 0);
+    deathVel   = p.createVector(0, 0);
+    deathAcc   = p.createVector(0, DEATH_GRAVITY);
+    deathAngle = 0;
 
     const fishFilenames = [
       '/peixe_azul.png',
@@ -153,30 +158,17 @@ export function createSketch(p) {
     } else {
       character = characterImages[0];
     }
-    // Personagem parado ou em movimento
-    p.image(character, characterX, characterY, 100, 100);
+
+    characterPos.add(characterVel);
+    p.image(character, characterPos.x, characterPos.y, 100, 100);
 
     if (p.frameCount % 60 === 0) {
-      const randomImage = fishImages[Math.floor(p.random(fishImages.length))];
-      const newFish = {
-        x: p.width,
-        y: p.random(50, p.height - 50),
-        speed: p.random(2, 5),
-        size: p.random(30, 60),
-        img: randomImage
-      };
-      fishes.push(newFish);
+      spawnFish(p, fishImages);
     }
 
     for (let i = fishes.length - 1; i >= 0; i--) {
       const fish = fishes[i];
-      desenharEColidirPeixe(p, fish);
-      if (gameOver) break;
-
-
-      if (fish.x < -fish.size) {
-        fishes.splice(i, 1);
-      }
+      desenharEColidirPeixe(p, fish, i);
     }
 
     // Spawn de bolhas (por exemplo, a cada 80 frames)
@@ -189,18 +181,19 @@ export function createSketch(p) {
   p.keyPressed = () => {
     isMoving = true;
     if (p.key === 'w') {
-      characterY -= 5;
+      characterVel.set(0, -5);
     } else if (p.key === 's') {
-      characterY += 5;
+      characterVel.set(0,  5);
     } else if (p.key === 'a') {
-      characterX -= 5;
+      characterVel.set(-5, 0);
     } else if (p.key === 'd') {
-      characterX += 5;
+      characterVel.set( 5, 0);
     }
   };
 
   p.keyReleased = () => {
     isMoving = false;
+    characterVel.set(0, 0);
   };
 
   p.windowResized = () => {
@@ -209,89 +202,71 @@ export function createSketch(p) {
 }
 
 
-function desenharEColidirPeixe(p, fish) {
-  // tamanho desenhado
-  const fishW = fish.size;
-  const fishH = fish.size / 1.5;
+function desenharEColidirPeixe(p, fish, index) {
+  const w = fish.size;
+  const h = fish.size / 1.5;
 
-  const cxChar = characterX + 50;      // personagem 100×100 = raio 50
-  const cyChar = characterY + 50;
-  const cxFish = fish.x + fishW / 2;
-  const cyFish = fish.y + fishH / 2;
+  // Desenha peixe
+  p.image(fish.img, fish.pos.x, fish.pos.y, w, h);
 
-  // desenha e move o peixe
-  p.image(fish.img, fish.x, fish.y, fishW, fishH);
-  fish.x -= fish.speed;
+  // Move o peixe
+  fish.pos.add(fish.vel);
 
-  // calcula distância dos centros
-  const d = p.dist(cxChar, cyChar, cxFish, cyFish);
-
+  // Colisão
+  const charCenter = characterPos.copy().add(50, 50);
+  const fishCenter = fish.pos.copy().add(w / 2, h / 2);
+  const d = charCenter.dist(fishCenter);
   const rChar = 50;
-  const rFish = Math.min(fishW, fishH) / 2;
+  const rFish = Math.min(w, h) / 2;
 
   if (d < rChar + rFish) {
-    fishes.splice(fishes.indexOf(fish), 1); // remove peixe colidido
+    fishes.splice(index, 1);
     vidas--;
     emitirSomDano();
-
-    piscarVidaFrames = 15; // ativa piscada rápida
-    
-    if (vidas <= 0) {
-      iniciaAnimacaoMorte();
-    }
+    piscarVidaFrames = 15;
+    if (vidas <= 0) iniciaAnimacaoMorte();
   }
 }
 
 function spawnBolha(p) {
+  const pos = p.createVector(p.width, p.random(20, p.height - 20));
+  const vel = p.createVector(-p.random(1,3), 0);
   const size = p.random(MIN_BUBBLE_SIZE, MAX_BUBBLE_SIZE);
-  bubbles.push({
-    x: p.width,
-    y: p.random(20, p.height - 20),
-    speed: p.random(1, 3),
-    size,
-    img: bubbleImage
-  });
-}
-
-function desenharBolha(p, bolha) {
-  p.image(
-    bolha.img,
-    bolha.x,
-    bolha.y,
-    bolha.size,
-    bolha.size
-  );
-  bolha.x -= bolha.speed;
+  bubbles.push({ pos, vel, size, img: bubbleImage });
 }
 
 function atualizarBolhas(p) {
   for (let i = bubbles.length - 1; i >= 0; i--) {
     const b = bubbles[i];
-    desenharBolha(p, b);
 
-    // Calcula os centros do personagem e da bolha
-    const charCenterX = characterX + 50; // personagem tem 100 de largura
-    const charCenterY = characterY + 50; // personagem tem 100 de altura
-    const bubbleCenterX = b.x + b.size / 2;
-    const bubbleCenterY = b.y + b.size / 2;
+    // Desenha e atualiza posição da bolha
+    p.image(b.img, b.pos.x, b.pos.y, b.size, b.size);
+    b.pos.add(b.vel);
 
-    //Calcula a distância entre personagem e bolha
-    const distance = p.dist(charCenterX, charCenterY, bubbleCenterX, bubbleCenterY);
+    // Calcula centros usando cópias dos vetores
+    const charCenter = characterPos.copy().add(50, 50);
+    const bubbleCenter = b.pos.copy().add(b.size/2, b.size/2);
 
-    // Raio do personagem = 50 (metade de 100), raio da bolha = b.size/2
-    if (distance < 50 + b.size / 2) {
-      // Houve colisão, então remove a bolha
+    // Distância por instância também
+    const dist = charCenter.dist(bubbleCenter);
+    const rChar   = 50;
+    const rBubble = b.size / 2;
+
+    // Colisão
+    if (dist < rChar + rBubble) {
       bubbles.splice(i, 1);
-      emitirSomBolha(b.size)
-      pontuacao++; // incrementa pontos ao pegar bolha
-
+      emitirSomBolha(b.size);
+      pontuacao++;
       continue;
     }
 
-    // Remove bolhas que sairem da tela
-    if (b.x < -b.size) bubbles.splice(i, 1);
+    // Remove bolha que saiu da tela
+    if (b.pos.x < -b.size) {
+      bubbles.splice(i, 1);
+    }
   }
 }
+
 
 function emitirSomBolha(bubbleSize) {
   // normaliza tamanho entre 0 e 1
@@ -305,6 +280,17 @@ function emitirSomBolha(bubbleSize) {
   bubblePopSound.play();
 }
 
+function spawnFish(p, images) {
+  const size = p.random(30, 60);
+  const pos  = p.createVector(p.width, p.random(50, p.height - 50));
+  const vel  = p.createVector(-p.random(2, 5), 0);
+
+  const imgIndex = Math.floor(p.random(images.length));
+  const img = images[imgIndex];
+
+  fishes.push({ pos, vel, size, img });
+}
+
 function emitirSomGameOver() {
   gameOverSound.currentTime = 0;
   gameOverSound.volume = 0.5
@@ -315,8 +301,8 @@ function resetGame(p) {
   // limpa tudo
   fishes = [];
   bubbles = [];
-  characterX = 50;
-  characterY = p.height / 2 - 50;
+  characterPos.x = 50;
+  characterPos.y = p.height / 2 - 50;
   gameOver = false;
   vidas = MAX_VIDAS; // ← resetando as vidas 
   pontuacao = 0;
@@ -325,30 +311,29 @@ function resetGame(p) {
 }
 
 function iniciaAnimacaoMorte() {
-  dying = true;
-  deathVy = -8;   // “pulo” inicial pra cima
-  deathAngle = 0;    // sem giro no início
-  // toca o som de morrer
+   dying = true;
+  deathVel.set(0, -8); // “pulo” inicial pra cima
+  deathAcc.set(0, DEATH_GRAVITY); // gravidade
+  deathAngle = 0; // zera o ângulo antes de começar a girar
   emitirSomGameOver();
 }
 
 function animacaoMorte(p) {
-  // Física da queda
-  deathVy += DEATH_GRAVITY;
-  characterY += deathVy;
-  deathAngle += DEATH_ANG_VEL;
+  deathVel.add(deathAcc);
+  characterPos.add(deathVel);
+  deathAngle += DEATH_ANG_VEL;       
 
-  // Rotaciona personagem
+  // Desenha o personagem girando em torno do centro
   p.push();
-  p.translate(characterX + 50, characterY + 50);
-  p.rotate(deathAngle);
-  p.image(characterImages[0], -50, -50, 100, 100);
+    p.translate(characterPos.x + 50, characterPos.y + 50);
+    p.rotate(deathAngle);
+    p.image(characterImages[0], -50, -50, 100, 100);
   p.pop();
 
-  // Quando acabar de cair faz o set de game over
-  if (characterY > p.height + 100) {
-    dying = false;   // parar animação
-    gameOver = true;    // habilita tela de Game Over
+  // Quando cair além da tela, termina a animação
+  if (characterPos.y > p.height + 100) {
+    dying   = false; // para animação
+    gameOver = true; // habilita tela de Game Over
   }
 }
 

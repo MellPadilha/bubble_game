@@ -5,6 +5,7 @@ import bubble_pop_sound from '/bubble_pop.mp3';
 import game_over_sound from '/game_over.wav';
 import seagulls_sound from '/seagulls_sound.wav';
 import dano_sound from '/dano_sound.wav';
+import extra_life_sound from '/extra_life.wav';
 
 
 let character;
@@ -22,15 +23,16 @@ let audioContext;
 let danoBuffer;
 let pontuacao = 0;
 
-
-
 const MIN_BUBBLE_SIZE = 30;
 const MAX_BUBBLE_SIZE = 50;
 const MIN_VOLUME = 0.2;
 const MAX_VOLUME = 1.0;
 const MAX_VIDAS = 5;
+const LIFE_CHANCE = 0.1;
+let extraLifeSound;
 let bubbles = [];
 let bubbleImage;
+let lifeIconImage;
 let bubblePopSound;
 
 let gameOverSound;
@@ -77,9 +79,11 @@ export function createSketch(p) {
     fishImages = await Promise.all(fishFilenames.map(filename => p.loadImage(filename)));
 
     bubbleImage = await p.loadImage('/bubble.png');
+    lifeIconImage  = await p.loadImage('/life-icon.webp'); 
 
     bubblePopSound = new Audio(bubble_pop_sound);
     gameOverSound = new Audio(game_over_sound);
+    extraLifeSound = new Audio(extra_life_sound);
 
     // cria o botão e esconde
     restartButton = p.createButton('↻ Restart');
@@ -232,7 +236,15 @@ function spawnBolha(p) {
   const pos = p.createVector(p.width, p.random(20, p.height - 20));
   const vel = p.createVector(-p.random(1,3), 0);
   const size = p.random(MIN_BUBBLE_SIZE, MAX_BUBBLE_SIZE);
-  bubbles.push({ pos, vel, size, img: bubbleImage });
+
+  const isLife = p.random() < LIFE_CHANCE;
+  const img = isLife ? lifeIconImage : bubbleImage;
+
+  if (isLife) {
+    bubbles.push({ pos, vel, size: 30, img,  isLife });
+  } else{
+    bubbles.push({ pos, vel, size, img,  isLife });
+  }
 }
 
 function atualizarBolhas(p) {
@@ -255,9 +267,13 @@ function atualizarBolhas(p) {
     // Colisão
     if (dist < rChar + rBubble) {
       bubbles.splice(i, 1);
-      emitirSomBolha(b.size);
-      pontuacao++;
-      continue;
+      if(b.isLife){
+        vidas = Math.min(vidas + 1, MAX_VIDAS);
+        emitirSomVidaExtra();
+      } else {
+        emitirSomBolha(b.size);
+        pontuacao++;
+      }
     }
 
     // Remove bolha que saiu da tela
@@ -353,4 +369,10 @@ function emitirSomDano() {
   source.connect(gain);
   gain.connect(audioContext.destination);
   source.start(0);
+}
+
+function emitirSomVidaExtra() {
+  extraLifeSound.currentTime = 0;
+  extraLifeSound.volume = 0.7
+  extraLifeSound.play();
 }

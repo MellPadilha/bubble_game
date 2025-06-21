@@ -53,6 +53,11 @@ let gameOverSound;
 let restartButton;
 let startButton;
 
+// Novas variáveis para a tela “Sobre”
+let aboutButton;
+let backButton;
+let showAbout = false;
+
 let dying = false;
 let deathVy = 0;
 let deathAngle = 0;
@@ -68,6 +73,12 @@ const BURST_BUBBLE_COUNT = 30;
 
 let gameStartTime = 0;
 const INITIAL_SPAWN_DELAY = 3000; // 3 segundos de delay
+
+// Variáveis para sinalização de progressão
+let faseAtual = 1;
+let mostrarMensagemFase = false;
+let tempoMensagemFase = 0;
+const DURACAO_MENSAGEM_FASE = 2000; // ms
 
 export function createSketch(p) {
   p.setup = async () => {
@@ -100,8 +111,9 @@ export function createSketch(p) {
     bubblePopSound = new Audio(bubble_pop_sound);
     gameOverSound = new Audio(game_over_sound);
 
+    // Botão "Iniciar"
     startButton = p.createButton('Iniciar');
-    startButton.position(p.width / 2 - 50, p.height / 2 + 50);
+    startButton.position(p.width / 2 - 150, p.height / 2 + 50);
     startButton.style('background-color', '#0066cc');
     startButton.style('color', 'white');
     startButton.style('border', 'none');
@@ -115,8 +127,44 @@ export function createSketch(p) {
         gameStarted = true;
         gameStartTime = p.millis();
         startButton.hide();
+        aboutButton.hide();
         menuBubbles = [];
       }, 1000);
+    });
+
+    // Botão "Sobre"
+    aboutButton = p.createButton('Sobre');
+    aboutButton.position(p.width / 2 + 20, p.height / 2 + 50);
+    aboutButton.style('background-color', '#888');
+    aboutButton.style('color', 'white');
+    aboutButton.style('border', 'none');
+    aboutButton.style('padding', '15px 30px');
+    aboutButton.style('font-size', '20px');
+    aboutButton.style('border-radius', '5px');
+    aboutButton.style('cursor', 'pointer');
+    aboutButton.mousePressed(() => {
+      showAbout = true;
+      startButton.hide();
+      aboutButton.hide();
+      backButton.show();
+    });
+
+    // Botão "Voltar" na tela Sobre
+    backButton = p.createButton('Voltar');
+    backButton.position(p.width / 2 - 50, p.height - 100);
+    backButton.style('background-color', '#0066cc');
+    backButton.style('color', 'white');
+    backButton.style('border', 'none');
+    backButton.style('padding', '10px 20px');
+    backButton.style('font-size', '18px');
+    backButton.style('border-radius', '5px');
+    backButton.style('cursor', 'pointer');
+    backButton.hide();
+    backButton.mousePressed(() => {
+      showAbout = false;
+      startButton.show();
+      aboutButton.show();
+      backButton.hide();
     });
 
     restartButton = p.createButton('↻ Restart');
@@ -131,7 +179,7 @@ export function createSketch(p) {
     restartButton.mousePressed(() => resetGame(p));
     restartButton.hide();
 
-    seagullsSound = new Audio(seagulls_sound)
+    seagullsSound = new Audio(seagulls_sound);
     nextSeagullFrame = p.frameCount + p.int(p.random(300, 1000));
     lastSpeedIncreaseTime = p.millis();
 
@@ -140,24 +188,54 @@ export function createSketch(p) {
 
   p.draw = () => {
     p.clear();
-    
+
+    // Tela de início ou Sobre
     if (!gameStarted) {
+      // Se estiver na tela Sobre, exibe informações
+      if (showAbout) {
+        p.fill(0, 150);
+        p.rect(0, 0, p.width, p.height);
+        p.fill(255);
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textSize(32);
+        p.text('Sobre o Jogo', p.width / 2, p.height / 2 - 100);
+        p.textSize(20);
+        p.text('Este jogo consiste em coletar bolhas e evitar peixes e baleias.', p.width / 2, p.height / 2 - 40);
+        p.text('Desenvolvedores: Johnny Carvalho - Mellanie Taveira - Rafael Giroldo - Vinícius Kuchnir', p.width / 2, p.height / 2 + 10);
+        return;
+      }
+
+      // Tela inicial padrão
       const logoWidth = 500;
       const logoHeight = 500;
       p.image(gameLogo, p.width / 2 - logoWidth / 2, p.height / 2 - logoHeight + 50, logoWidth, logoHeight);
-      
+
       if (p.frameCount % MENU_BUBBLE_SPAWN_RATE === 0) {
         spawnMenuBubble(p);
       }
-      
       updateMenuBubbles(p);
       p.image(character, characterX, characterY, 100, 100);
       return;
     }
 
+    // Sinalização de progressão: mensagem de fase
+    if (mostrarMensagemFase && p.millis() - tempoMensagemFase < DURACAO_MENSAGEM_FASE) {
+      p.push();
+      p.textAlign(p.CENTER, p.TOP);
+      p.textSize(48);
+      p.fill(0, 180);
+      p.rect(0, 0, p.width, 80);
+      p.fill(255, 220, 40);
+      p.text(`Fase ${faseAtual}`, p.width / 2, 20);
+      p.pop();
+    } else if (mostrarMensagemFase) {
+      mostrarMensagemFase = false;
+    }
+
+    // (Demais lógicas de jogo mantidas inalteradas…)
     p.textSize(24);
     p.textAlign(p.LEFT, p.TOP);
-    
+
     if (piscarVidaFrames > 0) {
       const alpha = p.map(piscarVidaFrames, 0, 15, 0, 255);
       p.fill(255, 100, 100, alpha);
@@ -165,8 +243,8 @@ export function createSketch(p) {
     } else {
       p.fill(255);
     }
-    
-    p.text(`❤️ ${vidas} + Lifes   |   🫧 ${pontuacao} + Points`, 20, 20);
+
+    p.text(`❤️ ${vidas} Lifes   |   🫧 ${pontuacao} Points`, 20, 20);
 
     if (p.frameCount >= nextSeagullFrame) {
       emitirSomGaivota();
@@ -179,23 +257,16 @@ export function createSketch(p) {
     }
 
     if (gameOver) {
-      p.fill(255, 255, 255);
+      p.fill(255);
       p.textSize(64);
       p.textAlign(p.CENTER, p.CENTER);
-    
       p.text('Game Over', p.width / 2, p.height / 2 - 40);
-    
       p.textSize(32);
-      p.fill(255);
-      p.text(`🫧 Bolhas coletadas: ${pontuacao}`, p.width / 2, p.height / 2 + 20);
-    
+      p.text(`Bolhas coletadas: ${pontuacao}`, p.width / 2, p.height / 2 + 20);
       restartButton.show();
       const bw = restartButton.elt.offsetWidth;
       const bh = restartButton.elt.offsetHeight;
-      restartButton.position(
-        p.width / 2 - bw / 2,
-        (p.height / 2 - bh / 2) + 100
-      );
+      restartButton.position(p.width / 2 - bw / 2, p.height / 2 + 100 - bh / 2);
       return;
     }
 
@@ -221,9 +292,13 @@ export function createSketch(p) {
     }
 
     const currentTime = p.millis();
+    // Verifica se é hora de aumentar a dificuldade
     if (currentTime - lastSpeedIncreaseTime >= SPEED_INCREASE_INTERVAL * 1000) {
       currentSpeedMultiplier += SPEED_INCREASE_AMOUNT;
       lastSpeedIncreaseTime = currentTime;
+      faseAtual++;
+      mostrarMensagemFase = true;
+      tempoMensagemFase = p.millis();
     }
 
     for (let i = fishes.length - 1; i >= 0; i--) {
@@ -264,12 +339,12 @@ export function createSketch(p) {
 
   p.keyPressed = () => {
     if (!gameStarted || gameOver) return;
-    
+
     if (!isMoving) {
       isMoving = true;
       character = characterImages[0];
     }
-    
+
     if (p.key === 'w') {
       characterY -= characterSpeed;
     } else if (p.key === 's') {
@@ -313,7 +388,7 @@ function desenharEColidirPeixe(p, fish) {
     emitirSomDano();
 
     piscarVidaFrames = 15;
-    
+
     if (vidas <= 0) {
       iniciaAnimacaoMorte();
     }
@@ -402,10 +477,16 @@ function resetGame(p) {
   nextWhaleSpawn = p.frameCount + p.int(p.random(WHALE_MIN_INTERVAL, WHALE_MAX_INTERVAL) * 60);
   restartButton.hide();
   startButton.show();
+  aboutButton.show(); // <-- Adicione esta linha!
   p.loop();
   menuBubbles = [];
   gameStartTime = p.millis();
+  // Reinicia a fase e mensagem
+  faseAtual = 1;
+  mostrarMensagemFase = false;
+  tempoMensagemFase = 0;
 }
+
 
 function iniciaAnimacaoMorte() {
   dying = true;
@@ -470,7 +551,7 @@ function desenharEColidirBaleia(p, whale) {
     vidas -= 2;
     emitirSomDano();
     piscarVidaFrames = 15;
-    
+
     if (vidas <= 0) {
       iniciaAnimacaoMorte();
     }
@@ -482,7 +563,7 @@ function spawnMenuBubble(p, fromBottom = true) {
   const x = p.random(0, p.width);
   const y = fromBottom ? p.height + size : p.random(p.height, p.height + 100);
   const speedY = p.random(2, 5);
-  
+
   menuBubbles.push({
     x,
     y,
@@ -498,13 +579,13 @@ function updateMenuBubbles(p) {
     const bubble = menuBubbles[i];
     bubble.y -= bubble.speedY;
     bubble.rotation += 0.02;
-    
+
     p.push();
     p.translate(bubble.x, bubble.y);
     p.rotate(bubble.rotation);
     p.image(bubble.img, -bubble.size/2, -bubble.size/2, bubble.size, bubble.size);
     p.pop();
-    
+
     if (bubble.y < -bubble.size) {
       menuBubbles.splice(i, 1);
     }

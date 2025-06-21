@@ -1,36 +1,14 @@
-import parado from '/parado.png';
-import nadando1 from '/nadando_1.png';
-import nadando2 from '/nadando_2.png';
-import bubble_pop_sound from '/bubble_pop.mp3';
-import game_over_sound from '/game_over.wav';
-import seagulls_sound from '/seagulls_sound.wav';
-import dano_sound from '/dano_sound.wav';
-import baleia from '/baleia.png';
+import parado from '/src/assets/images/parado.png';
+import nadando1 from '/src/assets/images/nadando_1.png';
+import nadando2 from '/src/assets/images/nadando_2.png';
+import bubble_pop_sound from '/src/assets/sounds/bubble_pop.mp3';
+import game_over_sound from '/src/assets/sounds/game_over.wav';
+import seagulls_sound from '/src/assets/sounds/seagulls_sound.wav';
+import dano_sound from '/src/assets/sounds/dano_sound.wav';
+import baleia from '/src/assets/images/baleia.png';
 
-let character;
-let characterImages = [];
-let characterIndex = 0;
-let characterX = 50;
-let characterY;
-let fishes = [];
-let fishImages = [];
-let isMoving = false;
-let gameOver = false;
-let gameStarted = false;
-let vidas = 5;
-let piscarVidaFrames = 0;
-let audioContext;
-let danoBuffer;
-let pontuacao = 0;
-let whaleImage;
-let nextWhaleSpawn = 0;
-let whales = [];
-let paradoImg;
-let gameLogo;
-let characterSpeed = 5;
 const SPEED_INCREASE_INTERVAL = 30;
 const SPEED_INCREASE_AMOUNT = 1;
-
 const MIN_BUBBLE_SIZE = 30;
 const MAX_BUBBLE_SIZE = 50;
 const MIN_VOLUME = 0.2;
@@ -42,558 +20,748 @@ const WHALE_MIN_INTERVAL = 15;
 const WHALE_MAX_INTERVAL = 30;
 const WHALE_SIZE = 120;
 const WHALE_SPEED_MULTIPLIER = 0.8;
-
-let bubbles = [];
-let bubbleImage;
-let bubblePopSound;
-let lastSpeedIncreaseTime = 0;
-let currentSpeedMultiplier = 1;
-
-let gameOverSound;
-let restartButton;
-let startButton;
-
-// Novas variáveis para a tela “Sobre”
-let aboutButton;
-let backButton;
-let showAbout = false;
-
-let dying = false;
-let deathVy = 0;
-let deathAngle = 0;
-const DEATH_GRAVITY = 0.5;
-const DEATH_ANG_VEL = 0.15;
-
-let nextSeagullFrame = 0;
-let seagullsSound;
-
-let menuBubbles = [];
 const MENU_BUBBLE_SPAWN_RATE = 30;
 const BURST_BUBBLE_COUNT = 30;
+const INITIAL_SPAWN_DELAY = 3000;
+const DURACAO_MENSAGEM_FASE = 2000;
 
-let gameStartTime = 0;
-const INITIAL_SPAWN_DELAY = 3000; // 3 segundos de delay
+class Player {
+  constructor(imgs, paradoImg, x, y, speed) {
+    this.imgs = imgs;
+    this.paradoImg = paradoImg;
+    this.x = x;
+    this.y = y;
+    this.speed = speed;
+    this.index = 0;
+    this.img = paradoImg;
+    this.isMoving = false;
+    this.dying = false;
+    this.deathVy = 0;
+    this.deathAngle = 0;
+  }
 
-// Variáveis para sinalização de progressão
-let faseAtual = 1;
-let mostrarMensagemFase = false;
-let tempoMensagemFase = 0;
-const DURACAO_MENSAGEM_FASE = 2000; // ms
+  animate(frameCount, frameDelay) {
+    if (frameCount % frameDelay === 0) {
+      this.index = (this.index + 1) % this.imgs.length;
+      this.img = this.imgs[this.index];
+    }
+  }
 
-export function createSketch(p) {
-  p.setup = async () => {
-    p.createCanvas(window.innerWidth, window.innerHeight);
-    p.frameRate(60);
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  draw(p) {
+    p.image(this.img, this.x, this.y, 100, 100);
+  }
 
+  move(key) {
+    if (key === 'w') this.y -= this.speed*3;
+    else if (key === 's') this.y += this.speed*3;
+    else if (key === 'a') this.x -= this.speed*3;
+    else if (key === 'd') this.x += this.speed*4;
+  }
+
+  reset(y) {
+    this.x = 50;
+    this.y = y;
+    this.speed = 5;
+    this.img = this.paradoImg;
+    this.isMoving = false;
+    this.dying = false;
+    this.deathVy = 0;
+    this.deathAngle = 0;
+  }
+
+  startDeath() {
+    this.dying = true;
+    this.deathVy = -8;
+    this.deathAngle = 0;
+  }
+
+  deathAnimation(p) {
+    this.deathVy += 0.5;
+    this.y += this.deathVy;
+    this.deathAngle += 0.15;
+    p.push();
+    p.translate(this.x + 50, this.y + 50);
+    p.rotate(this.deathAngle);
+    p.image(this.imgs[0], -50, -50, 100, 100);
+    p.pop();
+    if (this.y > p.height + 100) {
+      this.dying = false;
+      return true;
+    }
+    return false;
+  }
+}
+
+class Fish {
+  constructor(img, x, y, speed, size) {
+    this.img = img;
+    this.x = x;
+    this.y = y;
+    this.speed = speed;
+    this.size = size;
+  }
+
+  draw(p) {
+    const fishW = this.size;
+    const fishH = this.size / 1.5;
+    p.image(this.img, this.x, this.y, fishW, fishH);
+    this.x -= this.speed;
+  }
+
+  isOffscreen() {
+    return this.x < -this.size;
+  }
+}
+
+class Whale {
+  constructor(img, x, y, speed, size) {
+    this.img = img;
+    this.x = x;
+    this.y = y;
+    this.speed = speed;
+    this.size = size;
+  }
+
+  draw(p) {
+    const whaleW = this.size * 2;
+    const whaleH = this.size;
+    p.image(this.img, this.x, this.y, whaleW, whaleH);
+    this.x -= this.speed;
+  }
+
+  isOffscreen() {
+    return this.x < -this.size * 2;
+  }
+}
+
+class Bubble {
+  constructor(img, x, y, speed, size) {
+    this.img = img;
+    this.x = x;
+    this.y = y;
+    this.speed = speed;
+    this.size = size;
+  }
+
+  draw(p) {
+    p.image(this.img, this.x, this.y, this.size, this.size);
+    this.x -= this.speed;
+  }
+
+  isOffscreen() {
+    return this.x < -this.size;
+  }
+}
+
+class MenuBubble {
+  constructor(img, x, y, size, speedY, rotation) {
+    this.img = img;
+    this.x = x;
+    this.y = y;
+    this.size = size;
+    this.speedY = speedY;
+    this.rotation = rotation;
+  }
+
+  draw(p) {
+    this.y -= this.speedY;
+    this.rotation += 0.02;
+    p.push();
+    p.translate(this.x, this.y);
+    p.rotate(this.rotation);
+    p.image(this.img, -this.size / 2, -this.size / 2, this.size, this.size);
+    p.pop();
+  }
+
+  isOffscreen() {
+    return this.y < -this.size;
+  }
+}
+
+class UI {
+  constructor() {
+    this.startButton = null;
+    this.aboutButton = null;
+    this.backButton = null;
+    this.restartButton = null;
+    this.showAbout = false;
+  }
+
+  createButtons(p, onStart, onAbout, onBack, onRestart) {
+    this.startButton = p.createButton('Iniciar');
+    this.startButton.position(p.width / 2 - 150, p.height / 2 + 50);
+    this.startButton.style('background-color', '#0066cc');
+    this.startButton.style('color', 'white');
+    this.startButton.style('border', 'none');
+    this.startButton.style('padding', '15px 30px');
+    this.startButton.style('font-size', '20px');
+    this.startButton.style('border-radius', '5px');
+    this.startButton.style('cursor', 'pointer');
+    this.startButton.mousePressed(onStart);
+
+    this.aboutButton = p.createButton('Sobre');
+    this.aboutButton.position(p.width / 2 + 20, p.height / 2 + 50);
+    this.aboutButton.style('background-color', '#888');
+    this.aboutButton.style('color', 'white');
+    this.aboutButton.style('border', 'none');
+    this.aboutButton.style('padding', '15px 30px');
+    this.aboutButton.style('font-size', '20px');
+    this.aboutButton.style('border-radius', '5px');
+    this.aboutButton.style('cursor', 'pointer');
+    this.aboutButton.mousePressed(onAbout);
+
+    this.backButton = p.createButton('Voltar');
+    this.backButton.position(p.width / 2 - 50, p.height - 100);
+    this.backButton.style('background-color', '#0066cc');
+    this.backButton.style('color', 'white');
+    this.backButton.style('border', 'none');
+    this.backButton.style('padding', '10px 20px');
+    this.backButton.style('font-size', '18px');
+    this.backButton.style('border-radius', '5px');
+    this.backButton.style('cursor', 'pointer');
+    this.backButton.hide();
+    this.backButton.mousePressed(onBack);
+
+    this.restartButton = p.createButton('↻ Restart');
+    this.restartButton.position(20, 20);
+    this.restartButton.style('background-color', '#0066cc');
+    this.restartButton.style('color', 'white');
+    this.restartButton.style('border', 'none');
+    this.restartButton.style('padding', '15px 30px');
+    this.restartButton.style('font-size', '20px');
+    this.restartButton.style('border-radius', '5px');
+    this.restartButton.style('cursor', 'pointer');
+    this.restartButton.mousePressed(onRestart);
+    this.restartButton.hide();
+  }
+
+  showStartAbout() {
+    this.startButton.show();
+    this.aboutButton.show();
+    this.backButton.hide();
+  }
+
+  showBack() {
+    this.backButton.show();
+    this.startButton.hide();
+    this.aboutButton.hide();
+  }
+
+  showRestart(p) {
+    this.restartButton.show();
+    const bw = this.restartButton.elt.offsetWidth;
+    const bh = this.restartButton.elt.offsetHeight;
+    this.restartButton.position(p.width / 2 - bw / 2, p.height / 2 + 100 - bh / 2);
+  }
+
+  hideRestart() {
+    this.restartButton.hide();
+  }
+}
+
+class Game {
+  constructor(p) {
+    this.p = p;
+    this.audioContext = null;
+    this.danoBuffer = null;
+    this.seagullsSound = null;
+    this.bubblePopSound = null;
+    this.gameOverSound = null;
+    this.player = null;
+    this.fishes = [];
+    this.fishImages = [];
+    this.bubbles = [];
+    this.whales = [];
+    this.menuBubbles = [];
+    this.bubbleImage = null;
+    this.whaleImage = null;
+    this.gameLogo = null;
+    this.characterImages = [];
+    this.paradoImg = null;
+    this.gameOver = false;
+    this.gameStarted = false;
+    this.vidas = MAX_VIDAS;
+    this.piscarVidaFrames = 0;
+    this.pontuacao = 0;
+    this.currentSpeedMultiplier = 1;
+    this.lastSpeedIncreaseTime = 0;
+    this.nextWhaleSpawn = 0;
+    this.nextSeagullFrame = 0;
+    this.gameStartTime = 0;
+    this.faseAtual = 1;
+    this.mostrarMensagemFase = false;
+    this.tempoMensagemFase = 0;
+    this.ui = new UI();
+    this.showAbout = false;
+    this.gameOverSoundPlayed = false;
+  }
+
+  async preload() {
+    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const response = await fetch(dano_sound);
     const arrayBuffer = await response.arrayBuffer();
-    danoBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    this.danoBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
 
-    paradoImg = await p.loadImage(parado);
-    characterImages = await Promise.all([p.loadImage(nadando1), p.loadImage(nadando2)]);
-    character = paradoImg;
-    characterY = p.height / 2 - 50;
-    whaleImage = await p.loadImage(baleia);
-    gameLogo = await p.loadImage('/game_logo.png');
-
+    this.paradoImg = await this.p.loadImage(parado);
+    this.characterImages = await Promise.all([this.p.loadImage(nadando1), this.p.loadImage(nadando2)]);
+    this.whaleImage = await this.p.loadImage(baleia);
+    this.gameLogo = await this.p.loadImage('/src/assets/images/game_logo.png');
     const fishFilenames = [
-      '/peixe_azul.png',
-      '/peixe_roxo.png',
-      '/peixe_amarelo.png',
-      '/peixe_verde.png',
-      '/peixe_vermelho.png'
+      '/src/assets/images/peixe_azul.png',
+      '/src/assets/images/peixe_roxo.png',
+      '/src/assets/images/peixe_amarelo.png',
+      '/src/assets/images/peixe_verde.png',
+      '/src/assets/images/peixe_vermelho.png'
     ];
-    fishImages = await Promise.all(fishFilenames.map(filename => p.loadImage(filename)));
+    this.fishImages = await Promise.all(fishFilenames.map(filename => this.p.loadImage(filename)));
+    this.bubbleImage = await this.p.loadImage('/src/assets/images/bubble.png');
+    this.bubblePopSound = new Audio(bubble_pop_sound);
+    this.gameOverSound = new Audio(game_over_sound);
+    this.seagullsSound = new Audio(seagulls_sound);
 
-    bubbleImage = await p.loadImage('/bubble.png');
+    this.player = new Player(this.characterImages, this.paradoImg, 50, this.p.height / 2 - 50, 5);
+  }
 
-    bubblePopSound = new Audio(bubble_pop_sound);
-    gameOverSound = new Audio(game_over_sound);
+  setupUI() {
+    this.ui.createButtons(
+      this.p,
+      () => { // onStart
+        this.createBurstEffect();
+        setTimeout(() => {
+          this.gameStarted = true;
+          this.gameStartTime = this.p.millis();
+          this.ui.startButton.hide();
+          this.ui.aboutButton.hide();
+          this.menuBubbles = [];
+        }, 1000);
+      },
+      () => { // onAbout
+        this.showAbout = true;
+        this.ui.showBack();
+      },
+      () => { // onBack
+        this.showAbout = false;
+        this.ui.showStartAbout();
+      },
+      () => { // onRestart
+        this.reset();
+      }
+    );
+  }
 
-    // Botão "Iniciar"
-    startButton = p.createButton('Iniciar');
-    startButton.position(p.width / 2 - 150, p.height / 2 + 50);
-    startButton.style('background-color', '#0066cc');
-    startButton.style('color', 'white');
-    startButton.style('border', 'none');
-    startButton.style('padding', '15px 30px');
-    startButton.style('font-size', '20px');
-    startButton.style('border-radius', '5px');
-    startButton.style('cursor', 'pointer');
-    startButton.mousePressed(() => {
-      createBurstEffect(p);
-      setTimeout(() => {
-        gameStarted = true;
-        gameStartTime = p.millis();
-        startButton.hide();
-        aboutButton.hide();
-        menuBubbles = [];
-      }, 1000);
-    });
-
-    // Botão "Sobre"
-    aboutButton = p.createButton('Sobre');
-    aboutButton.position(p.width / 2 + 20, p.height / 2 + 50);
-    aboutButton.style('background-color', '#888');
-    aboutButton.style('color', 'white');
-    aboutButton.style('border', 'none');
-    aboutButton.style('padding', '15px 30px');
-    aboutButton.style('font-size', '20px');
-    aboutButton.style('border-radius', '5px');
-    aboutButton.style('cursor', 'pointer');
-    aboutButton.mousePressed(() => {
-      showAbout = true;
-      startButton.hide();
-      aboutButton.hide();
-      backButton.show();
-    });
-
-    // Botão "Voltar" na tela Sobre
-    backButton = p.createButton('Voltar');
-    backButton.position(p.width / 2 - 50, p.height - 100);
-    backButton.style('background-color', '#0066cc');
-    backButton.style('color', 'white');
-    backButton.style('border', 'none');
-    backButton.style('padding', '10px 20px');
-    backButton.style('font-size', '18px');
-    backButton.style('border-radius', '5px');
-    backButton.style('cursor', 'pointer');
-    backButton.hide();
-    backButton.mousePressed(() => {
-      showAbout = false;
-      startButton.show();
-      aboutButton.show();
-      backButton.hide();
-    });
-
-    restartButton = p.createButton('↻ Restart');
-    restartButton.position(20, 20);
-    restartButton.style('background-color', '#0066cc');
-    restartButton.style('color', 'white');
-    restartButton.style('border', 'none');
-    restartButton.style('padding', '15px 30px');
-    restartButton.style('font-size', '20px');
-    restartButton.style('border-radius', '5px');
-    restartButton.style('cursor', 'pointer');
-    restartButton.mousePressed(() => resetGame(p));
-    restartButton.hide();
-
-    seagullsSound = new Audio(seagulls_sound);
-    nextSeagullFrame = p.frameCount + p.int(p.random(300, 1000));
-    lastSpeedIncreaseTime = p.millis();
-
-    nextWhaleSpawn = p.frameCount + p.int(p.random(WHALE_MIN_INTERVAL, WHALE_MAX_INTERVAL) * 60);
-  };
-
-  p.draw = () => {
+  draw() {
+    const p = this.p;
     p.clear();
-
-    // Tela de início ou Sobre
-    if (!gameStarted) {
-      // Se estiver na tela Sobre, exibe informações
-      if (showAbout) {
-        p.fill(0, 150);
+  
+    if (!this.gameStarted) {
+      if (this.showAbout) {
+        p.push();
+        // Fundo escurecido
+        p.fill(0, 180);
+        p.noStroke();
         p.rect(0, 0, p.width, p.height);
+  
+        // Card centralizado com sombra
+        const cardWidth = p.width * 0.7;
+        const cardHeight = p.height * 0.7;
+        const cardX = (p.width - cardWidth) / 2;
+        const cardY = (p.height - cardHeight) / 2;
+  
+        // Sombra do card
+        p.fill(0, 100);
+        p.noStroke();
+        p.rect(cardX + 10, cardY + 10, cardWidth, cardHeight, 28);
+  
+        // Card branco com borda azul e cantos arredondados
         p.fill(255);
-        p.textAlign(p.CENTER, p.CENTER);
-        p.textSize(32);
-        p.text('Sobre o Jogo', p.width / 2, p.height / 2 - 100);
+        p.stroke(50, 150, 200);
+        p.strokeWeight(4);
+        p.rect(cardX, cardY, cardWidth, cardHeight, 28);
+  
+        // Título estilizado
+        p.fill(50, 100, 200);
+        p.noStroke();
+        p.textAlign(p.CENTER, p.TOP);
+        p.textSize(42);
+        p.text('Sobre o Jogo', p.width / 2, cardY + 32);
+  
+        // Texto da descrição com espaçamento, alinhamento e destaque
+        p.fill(30);
         p.textSize(20);
-        p.text('Este jogo consiste em coletar bolhas e evitar peixes e baleias.', p.width / 2, p.height / 2 - 40);
-        p.text('Desenvolvedores: Johnny Carvalho - Mellanie Taveira - Rafael Giroldo - Vinícius Kuchnir', p.width / 2, p.height / 2 + 10);
+        p.textAlign(p.LEFT, p.TOP);
+        const padding = 48;
+        const textX = cardX + padding;
+        const textY = cardY + 100;
+        const textWidth = cardWidth - 2 * padding;
+  
+        const description =
+          "🫧 **Uma aventura subaquática cheia de desafios e magia!**\n\n" +
+          "Você está pronto para mergulhar em um mundo onde cada bolha pode ser a diferença entre a vitória e o fracasso? " +
+          "Em *Bubble Game*, você assume o papel de **Bubbly**, um destemido explorador dos sete mares, em busca das lendárias Bolhas de Luz — bolhas mágicas que, segundo a lenda, concedem sorte e alegria a quem as coleta.\n\n" +
+          "⚠️ **Mas cuidado!** As águas estão repletas de peixes travessos e baleias gigantes, guardiões naturais desse tesouro submerso. Eles farão de tudo para impedir que você alcance seu objetivo. Com reflexos rápidos, coragem e um pouco de estratégia, você precisa desviar dos perigos, coletar o máximo de bolhas possível e provar que é o verdadeiro mestre dos oceanos!\n\n" +
+          "💨 Cada fase traz novos desafios e aumenta a velocidade da correnteza, testando seus limites e sua habilidade de sobreviver nas profundezas. O mar é lindo, mas só os mais habilidosos conseguem chegar ao topo do placar!\n\n" +
+          "✨ Entre nessa jornada mágica, desafie seus amigos, bata recordes e descubra até onde você consegue ir nesse universo de bolhas, cores e emoção!\n\n" +
+          "🫧 **Prepare-se: as bolhas estão esperando por você. O oceano nunca foi tão divertido!**";
+  
+        // Função para desenhar texto multiline (quebra automática)
+        function drawMultilineText(p, text, x, y, maxWidth, lineHeight) {
+          const paragraphs = text.split('\n');
+          let currY = y;
+          for (let para of paragraphs) {
+            let words = para.split(' ');
+            let line = '';
+            for (let n = 0; n < words.length; n++) {
+              let testLine = line + words[n] + ' ';
+              let testWidth = p.textWidth(testLine);
+              if (testWidth > maxWidth && n > 0) {
+                p.text(line, x, currY, maxWidth, lineHeight);
+                line = words[n] + ' ';
+                currY += lineHeight;
+              } else {
+                line = testLine;
+              }
+            }
+            p.text(line, x, currY, maxWidth, lineHeight);
+            currY += lineHeight * 1.3;
+          }
+        }
+  
+        drawMultilineText(p, description, textX, textY, textWidth, 28);
+  
+        // Desenvolvedores no rodapé do card
+        p.textAlign(p.CENTER, p.BOTTOM);
+        p.textSize(16);
+        p.fill(80, 80, 80);
+        p.text(
+          'Desenvolvedores: Johnny Carvalho - Mellanie Taveira - Rafael Giroldo - Vinícius Kuchnir',
+          p.width / 2,
+          cardY + cardHeight - 28
+        );
+  
+        p.pop();
         return;
       }
-
+  
       // Tela inicial padrão
       const logoWidth = 500;
       const logoHeight = 500;
-      p.image(gameLogo, p.width / 2 - logoWidth / 2, p.height / 2 - logoHeight + 50, logoWidth, logoHeight);
-
+      p.image(this.gameLogo, p.width / 2 - logoWidth / 2, p.height / 2 - logoHeight + 50, logoWidth, logoHeight);
+  
       if (p.frameCount % MENU_BUBBLE_SPAWN_RATE === 0) {
-        spawnMenuBubble(p);
+        this.spawnMenuBubble();
       }
-      updateMenuBubbles(p);
-      p.image(character, characterX, characterY, 100, 100);
+      this.updateMenuBubbles();
+      this.player.draw(p);
       return;
     }
 
-    // Sinalização de progressão: mensagem de fase
-    if (mostrarMensagemFase && p.millis() - tempoMensagemFase < DURACAO_MENSAGEM_FASE) {
+    if (this.mostrarMensagemFase && p.millis() - this.tempoMensagemFase < DURACAO_MENSAGEM_FASE) {
       p.push();
       p.textAlign(p.CENTER, p.TOP);
       p.textSize(48);
       p.fill(0, 180);
       p.rect(0, 0, p.width, 80);
       p.fill(255, 220, 40);
-      p.text(`Fase ${faseAtual}`, p.width / 2, 20);
+      p.text(`Fase ${this.faseAtual}`, p.width / 2, 20);
       p.pop();
-    } else if (mostrarMensagemFase) {
-      mostrarMensagemFase = false;
+    } else if (this.mostrarMensagemFase) {
+      this.mostrarMensagemFase = false;
     }
 
-    // (Demais lógicas de jogo mantidas inalteradas…)
     p.textSize(24);
     p.textAlign(p.LEFT, p.TOP);
-
-    if (piscarVidaFrames > 0) {
-      const alpha = p.map(piscarVidaFrames, 0, 15, 0, 255);
+    if (this.piscarVidaFrames > 0) {
+      const alpha = p.map(this.piscarVidaFrames, 0, 15, 0, 255);
       p.fill(255, 100, 100, alpha);
-      piscarVidaFrames--;
+      this.piscarVidaFrames--;
     } else {
       p.fill(255);
     }
+    p.text(`❤️ ${this.vidas} Lifes   |   🫧 ${this.pontuacao} Points`, 20, 20);
 
-    p.text(`❤️ ${vidas} Lifes   |   🫧 ${pontuacao} Points`, 20, 20);
-
-    if (p.frameCount >= nextSeagullFrame) {
-      emitirSomGaivota();
-      nextSeagullFrame = p.frameCount + p.int(p.random(300, 1000));
+    if (p.frameCount >= this.nextSeagullFrame) {
+      this.emitirSomGaivota();
+      this.nextSeagullFrame = p.frameCount + p.int(p.random(300, 1000));
     }
 
-    if (dying) {
-      animacaoMorte(p);
+    if (this.player.dying) {
+      if (this.player.deathAnimation(p)) {
+        this.emitirSomGameOver();
+        this.player.dying = false;
+        this.gameOver = true;
+      }
       return;
     }
+    
 
-    if (gameOver) {
+    if (this.gameOver) {
       p.fill(255);
       p.textSize(64);
       p.textAlign(p.CENTER, p.CENTER);
       p.text('Game Over', p.width / 2, p.height / 2 - 40);
       p.textSize(32);
-      p.text(`Bolhas coletadas: ${pontuacao}`, p.width / 2, p.height / 2 + 20);
-      restartButton.show();
-      const bw = restartButton.elt.offsetWidth;
-      const bh = restartButton.elt.offsetHeight;
-      restartButton.position(p.width / 2 - bw / 2, p.height / 2 + 100 - bh / 2);
+      p.text(`Bolhas coletadas: ${this.pontuacao}`, p.width / 2, p.height / 2 + 20);
+      this.ui.showRestart(p);
       return;
     }
 
-    const frameDelay = 10;
+    this.player.animate(p.frameCount, 10);
+    this.player.draw(p);
 
-    if (p.frameCount % frameDelay === 0) {
-      characterIndex = (characterIndex + 1) % characterImages.length;
-      character = characterImages[characterIndex];
-    }
-
-    p.image(character, characterX, characterY, 100, 100);
-
-    if (p.frameCount % 60 === 0 && p.millis() - gameStartTime > INITIAL_SPAWN_DELAY) {
-      const randomImage = fishImages[Math.floor(p.random(fishImages.length))];
-      const newFish = {
-        x: p.width,
-        y: p.random(50, p.height - 50),
-        speed: p.random(BASE_FISH_SPEED_MIN, BASE_FISH_SPEED_MAX) * currentSpeedMultiplier,
-        size: p.random(30, 60),
-        img: randomImage
-      };
-      fishes.push(newFish);
+    if (p.frameCount % 60 === 0 && p.millis() - this.gameStartTime > INITIAL_SPAWN_DELAY) {
+      const randomImage = this.fishImages[Math.floor(p.random(this.fishImages.length))];
+      this.fishes.push(new Fish(
+        randomImage,
+        p.width,
+        p.random(50, p.height - 50),
+        p.random(BASE_FISH_SPEED_MIN, BASE_FISH_SPEED_MAX) * this.currentSpeedMultiplier,
+        p.random(30, 60)
+      ));
     }
 
     const currentTime = p.millis();
-    // Verifica se é hora de aumentar a dificuldade
-    if (currentTime - lastSpeedIncreaseTime >= SPEED_INCREASE_INTERVAL * 1000) {
-      currentSpeedMultiplier += SPEED_INCREASE_AMOUNT;
-      lastSpeedIncreaseTime = currentTime;
-      faseAtual++;
-      mostrarMensagemFase = true;
-      tempoMensagemFase = p.millis();
+    if (currentTime - this.lastSpeedIncreaseTime >= SPEED_INCREASE_INTERVAL * 1000) {
+      this.currentSpeedMultiplier += SPEED_INCREASE_AMOUNT;
+      this.lastSpeedIncreaseTime = currentTime;
+      this.faseAtual++;
+      this.mostrarMensagemFase = true;
+      this.tempoMensagemFase = p.millis();
     }
 
-    for (let i = fishes.length - 1; i >= 0; i--) {
-      const fish = fishes[i];
-      desenharEColidirPeixe(p, fish);
-      if (gameOver) break;
-
-      if (fish.x < -fish.size) {
-        fishes.splice(i, 1);
+    for (let i = this.fishes.length - 1; i >= 0; i--) {
+      const fish = this.fishes[i];
+      fish.draw(p);
+      if (this.handleFishCollision(fish)) {
+        this.fishes.splice(i, 1);
+        continue;
+      }
+      if (fish.isOffscreen()) {
+        this.fishes.splice(i, 1);
       }
     }
 
-    if (p.frameCount % 160 === 0) spawnBolha(p);
+    if (p.frameCount % 160 === 0) this.spawnBubble();
 
-    atualizarBolhas(p);
-
-    if (p.frameCount >= nextWhaleSpawn) {
-      const newWhale = {
-        x: p.width,
-        y: p.random(50, p.height - 50),
-        speed: p.random(BASE_FISH_SPEED_MIN, BASE_FISH_SPEED_MAX) * currentSpeedMultiplier * WHALE_SPEED_MULTIPLIER,
-        size: WHALE_SIZE
-      };
-      whales.push(newWhale);
-      nextWhaleSpawn = p.frameCount + p.int(p.random(WHALE_MIN_INTERVAL, WHALE_MAX_INTERVAL) * 60);
+    for (let i = this.bubbles.length - 1; i >= 0; i--) {
+      const b = this.bubbles[i];
+      b.draw(p);
+      if (this.handleBubbleCollision(b)) {
+        this.bubbles.splice(i, 1);
+        continue;
+      }
+      if (b.isOffscreen()) this.bubbles.splice(i, 1);
     }
 
-    for (let i = whales.length - 1; i >= 0; i--) {
-      const whale = whales[i];
-      desenharEColidirBaleia(p, whale);
-      if (gameOver) break;
+    if (p.frameCount >= this.nextWhaleSpawn) {
+      this.whales.push(new Whale(
+        this.whaleImage,
+        p.width,
+        p.random(50, p.height - 50),
+        p.random(BASE_FISH_SPEED_MIN, BASE_FISH_SPEED_MAX) * this.currentSpeedMultiplier * WHALE_SPEED_MULTIPLIER,
+        WHALE_SIZE
+      ));
+      this.nextWhaleSpawn = p.frameCount + p.int(p.random(WHALE_MIN_INTERVAL, WHALE_MAX_INTERVAL) * 60);
+    }
 
-      if (whale.x < -whale.size) {
-        whales.splice(i, 1);
+    for (let i = this.whales.length - 1; i >= 0; i--) {
+      const whale = this.whales[i];
+      whale.draw(p);
+      if (this.handleWhaleCollision(whale)) {
+        this.whales.splice(i, 1);
+        continue;
+      }
+      if (whale.isOffscreen()) this.whales.splice(i, 1);
+    }
+  }
+
+  handleFishCollision(fish) {
+    const p = this.p;
+    const fishW = fish.size;
+    const fishH = fish.size / 1.5;
+    const cxChar = this.player.x + 50;
+    const cyChar = this.player.y + 50;
+    const cxFish = fish.x + fishW / 2;
+    const cyFish = fish.y + fishH / 2;
+    const d = p.dist(cxChar, cyChar, cxFish, cyFish);
+    const rChar = 50;
+    const rFish = Math.min(fishW, fishH) / 2;
+    if (d < rChar + rFish) {
+      this.vidas--;
+      this.emitirSomDano();
+      this.piscarVidaFrames = 15;
+      if (this.vidas <= 0) {
+        this.player.startDeath();
+      }
+      return true;
+    }
+    return false;
+  }
+
+  handleBubbleCollision(bubble) {
+    const p = this.p;
+    const charCenterX = this.player.x + 50;
+    const charCenterY = this.player.y + 50;
+    const bubbleCenterX = bubble.x + bubble.size / 2;
+    const bubbleCenterY = bubble.y + bubble.size / 2;
+    const distance = p.dist(charCenterX, charCenterY, bubbleCenterX, bubbleCenterY);
+    if (distance < 50 + bubble.size / 2) {
+      this.emitirSomBolha(bubble.size);
+      this.pontuacao++;
+      if (this.pontuacao > 0 && this.pontuacao % SPEED_INCREASE_INTERVAL === 0) {
+        this.player.speed += SPEED_INCREASE_AMOUNT;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  handleWhaleCollision(whale) {
+    const p = this.p;
+    const whaleW = whale.size * 2;
+    const whaleH = whale.size;
+    const cxChar = this.player.x + 50;
+    const cyChar = this.player.y + 50;
+    const cxWhale = whale.x + whaleW / 2;
+    const cyWhale = whale.y + whaleH / 2;
+    const d = p.dist(cxChar, cyChar, cxWhale, cyWhale);
+    const rChar = 50;
+    const rWhale = Math.min(whaleW, whaleH) / 2;
+    if (d < rChar + rWhale) {
+      this.vidas -= 2;
+      this.emitirSomDano();
+      this.piscarVidaFrames = 15;
+      if (this.vidas <= 0) {
+        this.player.startDeath();
+      }
+      return true;
+    }
+    return false;
+  }
+
+  spawnBubble() {
+    const p = this.p;
+    const size = p.random(MIN_BUBBLE_SIZE, MAX_BUBBLE_SIZE);
+    this.bubbles.push(new Bubble(
+      this.bubbleImage,
+      p.width,
+      p.random(20, p.height - 20),
+      p.random(1, 3),
+      size
+    ));
+  }
+
+  emitirSomBolha(bubbleSize) {
+    const t = (bubbleSize - MIN_BUBBLE_SIZE) / (MAX_BUBBLE_SIZE - MIN_BUBBLE_SIZE);
+    const vol = t * (MAX_VOLUME - MIN_VOLUME) + MIN_VOLUME;
+    this.bubblePopSound.volume = Math.min(Math.max(vol, 0), 1);
+    this.bubblePopSound.currentTime = 0;
+    this.bubblePopSound.play();
+  }
+
+  emitirSomGameOver() {
+    this.gameOverSound.currentTime = 0;
+    this.gameOverSound.volume = 0.5;
+    this.gameOverSound.play();
+  }
+
+  emitirSomGaivota() {
+    this.seagullsSound.currentTime = 0;
+    this.seagullsSound.volume = 0.7;
+    this.seagullsSound.play();
+  }
+
+  emitirSomDano() {
+    if (!this.audioContext || !this.danoBuffer) return;
+    const source = this.audioContext.createBufferSource();
+    source.buffer = this.danoBuffer;
+    const gain = this.audioContext.createGain();
+    gain.gain.value = 0.5;
+    source.connect(gain);
+    gain.connect(this.audioContext.destination);
+    source.start(0);
+  }
+
+  spawnMenuBubble(fromBottom = true) {
+    const p = this.p;
+    const size = p.random(MIN_BUBBLE_SIZE, MAX_BUBBLE_SIZE);
+    const x = p.random(0, p.width);
+    const y = fromBottom ? p.height + size : p.random(p.height, p.height + 100);
+    const speedY = p.random(2, 5);
+    this.menuBubbles.push(new MenuBubble(this.bubbleImage, x, y, size, speedY, p.random(0, p.TWO_PI)));
+  }
+
+  updateMenuBubbles() {
+    for (let i = this.menuBubbles.length - 1; i >= 0; i--) {
+      const bubble = this.menuBubbles[i];
+      bubble.draw(this.p);
+      if (bubble.isOffscreen()) {
+        this.menuBubbles.splice(i, 1);
       }
     }
+  }
+
+  createBurstEffect() {
+    for (let i = 0; i < BURST_BUBBLE_COUNT; i++) {
+      this.spawnMenuBubble(false);
+    }
+  }
+
+  reset() {
+    const p = this.p;
+    this.fishes = [];
+    this.bubbles = [];
+    this.whales = [];
+    this.player.reset(p.height / 2 - 50);
+    this.gameOver = false;
+    this.gameStarted = false;
+    this.vidas = MAX_VIDAS;
+    this.piscarVidaFrames = 0;
+    this.pontuacao = 0;
+    this.currentSpeedMultiplier = 1;
+    this.lastSpeedIncreaseTime = p.millis();
+    this.nextWhaleSpawn = p.frameCount + p.int(p.random(WHALE_MIN_INTERVAL, WHALE_MAX_INTERVAL) * 60);
+    this.ui.hideRestart();
+    this.ui.showStartAbout();
+    p.loop();
+    this.menuBubbles = [];
+    this.gameStartTime = p.millis();
+    this.faseAtual = 1;
+    this.mostrarMensagemFase = false;
+    this.tempoMensagemFase = 0;
+    this.showAbout = false;
+    this.gameOverSoundPlayed = false;
+  }
+}
+
+// Instância principal para p5.js
+export function createSketch(p) {
+  let game;
+  p.setup = async () => {
+    p.createCanvas(window.innerWidth, window.innerHeight);
+    p.frameRate(60);
+    game = new Game(p);
+    await game.preload();
+    game.setupUI();
+  };
+
+  p.draw = () => {
+    if (game) game.draw();
   };
 
   p.keyPressed = () => {
-    if (!gameStarted || gameOver) return;
-
-    if (!isMoving) {
-      isMoving = true;
-      character = characterImages[0];
+    if (!game.gameStarted || game.gameOver) return;
+    if (!game.player.isMoving) {
+      game.player.isMoving = true;
+      game.player.img = game.characterImages[0];
     }
-
-    if (p.key === 'w') {
-      characterY -= characterSpeed;
-    } else if (p.key === 's') {
-      characterY += characterSpeed;
-    } else if (p.key === 'a') {
-      characterX -= characterSpeed;
-    } else if (p.key === 'd') {
-      characterX += characterSpeed;
-    }
+    game.player.move(p.key);
   };
 
   p.keyReleased = () => {
-    isMoving = false;
+    if (game) game.player.isMoving = false;
   };
 
   p.windowResized = () => {
     p.resizeCanvas(window.innerWidth, window.innerHeight);
   };
-}
-
-function desenharEColidirPeixe(p, fish) {
-  const fishW = fish.size;
-  const fishH = fish.size / 1.5;
-
-  const cxChar = characterX + 50;
-  const cyChar = characterY + 50;
-  const cxFish = fish.x + fishW / 2;
-  const cyFish = fish.y + fishH / 2;
-
-  p.image(fish.img, fish.x, fish.y, fishW, fishH);
-  fish.x -= fish.speed;
-
-  const d = p.dist(cxChar, cyChar, cxFish, cyFish);
-
-  const rChar = 50;
-  const rFish = Math.min(fishW, fishH) / 2;
-
-  if (d < rChar + rFish) {
-    fishes.splice(fishes.indexOf(fish), 1);
-    vidas--;
-    emitirSomDano();
-
-    piscarVidaFrames = 15;
-
-    if (vidas <= 0) {
-      iniciaAnimacaoMorte();
-    }
-  }
-}
-
-function spawnBolha(p) {
-  const size = p.random(MIN_BUBBLE_SIZE, MAX_BUBBLE_SIZE);
-  bubbles.push({
-    x: p.width,
-    y: p.random(20, p.height - 20),
-    speed: p.random(1, 3),
-    size,
-    img: bubbleImage
-  });
-}
-
-function desenharBolha(p, bolha) {
-  p.image(
-    bolha.img,
-    bolha.x,
-    bolha.y,
-    bolha.size,
-    bolha.size
-  );
-  bolha.x -= bolha.speed;
-}
-
-function atualizarBolhas(p) {
-  for (let i = bubbles.length - 1; i >= 0; i--) {
-    const b = bubbles[i];
-    desenharBolha(p, b);
-
-    const charCenterX = characterX + 50;
-    const charCenterY = characterY + 50;
-    const bubbleCenterX = b.x + b.size / 2;
-    const bubbleCenterY = b.y + b.size / 2;
-
-    const distance = p.dist(charCenterX, charCenterY, bubbleCenterX, bubbleCenterY);
-
-    if (distance < 50 + b.size / 2) {
-      bubbles.splice(i, 1);
-      emitirSomBolha(b.size)
-      pontuacao++;
-
-      if (pontuacao > 0 && pontuacao % SPEED_INCREASE_INTERVAL === 0) {
-        characterSpeed += SPEED_INCREASE_AMOUNT;
-      }
-
-      continue;
-    }
-
-    if (b.x < -b.size) bubbles.splice(i, 1);
-  }
-}
-
-function emitirSomBolha(bubbleSize) {
-  const t = (bubbleSize - MIN_BUBBLE_SIZE) / (MAX_BUBBLE_SIZE - MIN_BUBBLE_SIZE);
-  const vol = t * (MAX_VOLUME - MIN_VOLUME) + MIN_VOLUME;
-  bubblePopSound.volume = Math.min(Math.max(vol, 0), 1);
-  bubblePopSound.currentTime = 0;
-  bubblePopSound.play();
-}
-
-function emitirSomGameOver() {
-  gameOverSound.currentTime = 0;
-  gameOverSound.volume = 0.5
-  gameOverSound.play();
-}
-
-function resetGame(p) {
-  fishes = [];
-  bubbles = [];
-  whales = [];
-  characterX = 50;
-  characterY = p.height / 2 - 50;
-  characterSpeed = 5;
-  gameOver = false;
-  gameStarted = false;
-  isMoving = false;
-  character = paradoImg;
-  vidas = MAX_VIDAS;
-  pontuacao = 0;
-  currentSpeedMultiplier = 1;
-  lastSpeedIncreaseTime = p.millis();
-  nextWhaleSpawn = p.frameCount + p.int(p.random(WHALE_MIN_INTERVAL, WHALE_MAX_INTERVAL) * 60);
-  restartButton.hide();
-  startButton.show();
-  aboutButton.show(); // <-- Adicione esta linha!
-  p.loop();
-  menuBubbles = [];
-  gameStartTime = p.millis();
-  // Reinicia a fase e mensagem
-  faseAtual = 1;
-  mostrarMensagemFase = false;
-  tempoMensagemFase = 0;
-}
-
-
-function iniciaAnimacaoMorte() {
-  dying = true;
-  deathVy = -8;
-  deathAngle = 0;
-  emitirSomGameOver();
-}
-
-function animacaoMorte(p) {
-  deathVy += DEATH_GRAVITY;
-  characterY += deathVy;
-  deathAngle += DEATH_ANG_VEL;
-
-  p.push();
-  p.translate(characterX + 50, characterY + 50);
-  p.rotate(deathAngle);
-  p.image(characterImages[0], -50, -50, 100, 100);
-  p.pop();
-
-  if (characterY > p.height + 100) {
-    dying = false;
-    gameOver = true;
-  }
-}
-
-function emitirSomGaivota() {
-  seagullsSound.currentTime = 0;
-  seagullsSound.volume = 0.7
-  seagullsSound.play();
-}
-
-function emitirSomDano() {
-  if (!audioContext || !danoBuffer) return;
-
-  const source = audioContext.createBufferSource();
-  source.buffer = danoBuffer;
-  const gain = audioContext.createGain();
-  gain.gain.value = 0.5;
-  source.connect(gain);
-  gain.connect(audioContext.destination);
-  source.start(0);
-}
-
-function desenharEColidirBaleia(p, whale) {
-  const whaleW = whale.size * 2;
-  const whaleH = whale.size;
-
-  const cxChar = characterX + 50;
-  const cyChar = characterY + 50;
-  const cxWhale = whale.x + whaleW / 2;
-  const cyWhale = whale.y + whaleH / 2;
-
-  p.image(whaleImage, whale.x, whale.y, whaleW, whaleH);
-  whale.x -= whale.speed;
-
-  const d = p.dist(cxChar, cyChar, cxWhale, cyWhale);
-  const rChar = 50;
-  const rWhale = Math.min(whaleW, whaleH) / 2;
-
-  if (d < rChar + rWhale) {
-    whales.splice(whales.indexOf(whale), 1);
-    vidas -= 2;
-    emitirSomDano();
-    piscarVidaFrames = 15;
-
-    if (vidas <= 0) {
-      iniciaAnimacaoMorte();
-    }
-  }
-}
-
-function spawnMenuBubble(p, fromBottom = true) {
-  const size = p.random(MIN_BUBBLE_SIZE, MAX_BUBBLE_SIZE);
-  const x = p.random(0, p.width);
-  const y = fromBottom ? p.height + size : p.random(p.height, p.height + 100);
-  const speedY = p.random(2, 5);
-
-  menuBubbles.push({
-    x,
-    y,
-    size,
-    speedY,
-    img: bubbleImage,
-    rotation: p.random(0, p.TWO_PI)
-  });
-}
-
-function updateMenuBubbles(p) {
-  for (let i = menuBubbles.length - 1; i >= 0; i--) {
-    const bubble = menuBubbles[i];
-    bubble.y -= bubble.speedY;
-    bubble.rotation += 0.02;
-
-    p.push();
-    p.translate(bubble.x, bubble.y);
-    p.rotate(bubble.rotation);
-    p.image(bubble.img, -bubble.size/2, -bubble.size/2, bubble.size, bubble.size);
-    p.pop();
-
-    if (bubble.y < -bubble.size) {
-      menuBubbles.splice(i, 1);
-    }
-  }
-}
-
-function createBurstEffect(p) {
-  for (let i = 0; i < BURST_BUBBLE_COUNT; i++) {
-    spawnMenuBubble(p, false);
-  }
 }

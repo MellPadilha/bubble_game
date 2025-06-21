@@ -29,6 +29,7 @@ const MIN_VOLUME = 0.2;
 const MAX_VOLUME = 1.0;
 const MAX_VIDAS = 5;
 const LIFE_CHANCE = 0.1;
+const ZIG_ZAG_CHANCE = 0.3;
 let extraLifeSound;
 let bubbles = [];
 let bubbleImage;
@@ -207,14 +208,18 @@ export function createSketch(p) {
 
 
 function desenharEColidirPeixe(p, fish, index) {
+  if (fish.isZig) {
+    fish.phase += fish.speed; // atualiza ângulo
+    fish.pos.y = fish.baseY + Math.sin(fish.phase) * fish.amp;   // aplica zig-zag na componente Y
+  }
+
+   // X sempre anda para a esquerda
+  fish.pos.x += fish.vel.x;
+
+  // Desenha o peixe
   const w = fish.size;
   const h = fish.size / 1.5;
-
-  // Desenha peixe
   p.image(fish.img, fish.pos.x, fish.pos.y, w, h);
-
-  // Move o peixe
-  fish.pos.add(fish.vel);
 
   // Colisão
   const charCenter = characterPos.copy().add(50, 50);
@@ -296,15 +301,26 @@ function emitirSomBolha(bubbleSize) {
   bubblePopSound.play();
 }
 
-function spawnFish(p, images) {
+function spawnFish(p) {
   const size = p.random(30, 60);
-  const pos  = p.createVector(p.width, p.random(50, p.height - 50));
-  const vel  = p.createVector(-p.random(2, 5), 0);
+  const baseY = p.random(50, p.height-50);
+  const velX  = -p.random(2, 5);
+  const isZig = p.random() < ZIG_ZAG_CHANCE;
 
-  const imgIndex = Math.floor(p.random(images.length));
-  const img = images[imgIndex];
-
-  fishes.push({ pos, vel, size, img });
+  const fish = {
+    pos: p.createVector(p.width, baseY),
+    vel: p.createVector(velX, 0),
+    size,
+    img:   fishImages[Math.floor(p.random(fishImages.length))],
+    isZig,
+    //Para fazer zig-zag comos peixes
+    baseY,
+    amp:   p.random(20, 50), // amplitude do desvio
+    phase: p.random(0, p.TWO_PI), // fase inicial aleatória
+    speed: p.random(0.05, 0.15) // velocidade angular
+  }
+ 
+  fishes.push(fish);
 }
 
 function emitirSomGameOver() {

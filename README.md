@@ -1,5 +1,5 @@
 # 🫧 Bubble Game
-![Alt text](image.png)
+![Alt text](/src/assets/images/image.png)
 
 
 **Bubble Game** é um jogo casual e divertido onde o objetivo é coletar o máximo de bolhas possível enquanto desvia de peixes e baleias perigosos! Com visual colorido, efeitos sonoros imersivos e jogabilidade progressiva, Bubble Game é perfeito para desafiar seus reflexos e se divertir por horas.
@@ -42,16 +42,16 @@
 ## 📸 Screenshots
 
 - Tela Inicial
-![Alt text](image-1.png)
+![Alt text](/src/assets/images/image-1.png)
 
 - Game Play
-![Alt text](image-2.png)
+![Alt text](/src/assets/images/image-2.png)
 
 - Game Over
-![Alt text](image-3.png)
-![Alt text](image-4.png)
+![Alt text](/src/assets/images/image-3.png)
+![Alt text](/src/assets/images/image-4.png)
 - Sobre
-![Alt text](image-5.png)
+![Alt text](/src/assets/images/image-5.png)
 
 ---
 

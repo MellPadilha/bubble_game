@@ -9,6 +9,7 @@ export function createSketch(p) {
     game = new Game(p);
     await game.preload();
     game.setupUI();
+    game.ui.showStartAbout();
   };
 
   p.draw = () => {
@@ -18,6 +19,14 @@ export function createSketch(p) {
   p.keyPressed = () => {
     if (!game) return; // Garante que o objeto foi criado
     if (!game.gameStarted || game.gameOver) return;
+    
+    if (p.key === 'f' || p.key === 'F') {
+      // Atirar bolha no boss
+      if (game.isBossFight) {
+        game.spawnPlayerBubble();
+      }
+      return;
+    }
     
     if (!game.player.isMoving) {
       game.player.isMoving = true;

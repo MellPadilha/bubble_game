@@ -4,6 +4,7 @@ import { Fish } from "./Finish";
 import { Whale } from "./While";
 import { MenuBubble } from "./MenuBubble";
 import { Bubble } from "./Bubble";
+import { FinalBoss } from "./FinalBoss";
 import parado from '/src/assets/images/parado.png';
 import nadando1 from '/src/assets/images/nadando_1.png';
 import nadando2 from '/src/assets/images/nadando_2.png';
@@ -12,6 +13,8 @@ import game_over_sound from '/src/assets/sounds/game_over.wav';
 import seagulls_sound from '/src/assets/sounds/seagulls_sound.wav';
 import dano_sound from '/src/assets/sounds/dano_sound.wav';
 import baleia from '/src/assets/images/baleia.png';
+import bossFinal from '/src/assets/images/boss_final.png';
+import bossBubble from '/src/assets/images/boss_bubble.png';
 import {
     BASE_FISH_SPEED_MAX,
     BASE_FISH_SPEED_MIN, 
@@ -51,8 +54,17 @@ export class Game {
       this.gameLogo = null;
       this.characterImages = [];
       this.paradoImg = null;
+      this.bossFinalImage = null;
+      this.bossBubbleImage = null;
+      this.finalBoss = null;
+      this.isBossFight = false;
+      this.playerBubbles = [];
+      this.lastPlayerBubbleSpawn = 0;
+      this.playerBubbleCooldown = 500; // 500ms entre tiros
       this.gameOver = false;
       this.gameStarted = false;
+      this.victory = false;
+      this.victorySoundPlayed = false;
       this.vidas = MAX_VIDAS;
       this.piscarVidaFrames = 0;
       this.pontuacao = 0;
@@ -71,6 +83,7 @@ export class Game {
     this.valorContagem = 3;
     this.tempoContagem = 0;
     this.tempoGo = 0;
+    this.bossMessageStartTime = 0; // Tempo de início da mensagem do boss
 
     }
   
@@ -83,6 +96,8 @@ export class Game {
       this.paradoImg = await this.p.loadImage(parado);
       this.characterImages = await Promise.all([this.p.loadImage(nadando1), this.p.loadImage(nadando2)]);
       this.whaleImage = await this.p.loadImage(baleia);
+      this.bossFinalImage = await this.p.loadImage(bossFinal);
+      this.bossBubbleImage = await this.p.loadImage(bossBubble);
       this.gameLogo = await this.p.loadImage('/src/assets/images/game_logo.png');
       const fishFilenames = [
         '/src/assets/images/peixe_azul.png',
@@ -110,6 +125,7 @@ export class Game {
             this.tempoContagem = this.p.millis();
             this.ui.startButton.hide();
             this.ui.aboutButton.hide();
+            this.ui.testBossButton.hide();
             this.menuBubbles = [];
           },
           
@@ -122,6 +138,12 @@ export class Game {
           this.ui.showStartAbout();
         },
         () => { // onRestart
+          this.reset();
+        },
+        () => { // onTestBoss
+          this.testBossMode();
+        },
+        () => { // onPlayAgain
           this.reset();
         }
       );
@@ -262,7 +284,7 @@ export class Game {
         // Tela inicial padrão
         const logoWidth = 500;
         const logoHeight = 500;
-        p.image(this.gameLogo, p.width / 2 - logoWidth / 2, p.height / 2 - logoHeight + 50, logoWidth, logoHeight);
+        p.image(this.gameLogo, p.width / 2 - logoWidth / 2, p.height / 2 - logoHeight - 150, logoWidth, logoHeight);
     
         if (p.frameCount % MENU_BUBBLE_SPAWN_RATE === 0) {
           this.spawnMenuBubble();
@@ -273,16 +295,32 @@ export class Game {
       }
   
       if (this.mostrarMensagemFase && p.millis() - this.tempoMensagemFase < DURACAO_MENSAGEM_FASE) {
-        p.push();
-        p.textAlign(p.CENTER, p.TOP);
-        p.textSize(48);
-        p.fill(0, 180);
-        p.rect(0, 0, p.width, 80);
-        p.fill(255, 220, 40);
-        p.text(`Fase ${this.faseAtual}`, p.width / 2, 20);
-        p.pop();
+        // Não mostrar mensagem de fase durante boss fight
+        if (!this.isBossFight) {
+          p.push();
+          p.textAlign(p.CENTER, p.TOP);
+          p.textSize(48);
+          p.fill(0, 180);
+          p.rect(0, 0, p.width, 80);
+          p.fill(255, 220, 40);
+          p.text(`Fase ${this.faseAtual}`, p.width / 2, 20);
+          p.pop();
+        }
       } else if (this.mostrarMensagemFase) {
         this.mostrarMensagemFase = false;
+      }
+
+      // Mensagem do boss na fase 4
+      if (this.isBossFight) {
+        p.push();
+        p.textAlign(p.CENTER, p.TOP);
+        p.textSize(24);
+        p.fill(255, 0, 0);
+        // Mostrar mensagem apenas por 30 segundos a partir do início do boss fight
+        if (p.millis() - this.bossMessageStartTime < 30000) {
+          p.text("Use F para atirar bolhas!", p.width / 2, 60);
+        }
+        p.pop();
       }
   
       p.textSize(24);
@@ -321,19 +359,27 @@ export class Game {
         this.ui.showRestart(p);
         return;
       }
+
+      if (this.victory) {
+        this.showVictoryScreen(p);
+        return;
+      }
   
       this.player.animate(p.frameCount, 10);
       this.player.draw(p);
   
+      // Spawn de peixes reduzido na fase 4
       if (p.frameCount % 60 === 0 && p.millis() - this.gameStartTime > INITIAL_SPAWN_DELAY) {
-        const randomImage = this.fishImages[Math.floor(p.random(this.fishImages.length))];
-        this.fishes.push(new Fish(
-          randomImage,
-          p.width,
-          p.random(50, p.height - 50),
-          p.random(BASE_FISH_SPEED_MIN, BASE_FISH_SPEED_MAX) * this.currentSpeedMultiplier,
-          p.random(30, 60)
-        ));
+        if (!this.isBossFight || p.random() < 0.3) { // 30% de chance de spawnar peixes na fase 4
+          const randomImage = this.fishImages[Math.floor(p.random(this.fishImages.length))];
+          this.fishes.push(new Fish(
+            randomImage,
+            p.width,
+            p.random(50, p.height - 50),
+            p.random(BASE_FISH_SPEED_MIN, BASE_FISH_SPEED_MAX) * this.currentSpeedMultiplier,
+            p.random(30, 60)
+          ));
+        }
       }
   
       const currentTime = p.millis();
@@ -343,6 +389,11 @@ export class Game {
         this.faseAtual++;
         this.mostrarMensagemFase = true;
         this.tempoMensagemFase = p.millis();
+        
+        // Ativar boss na fase 4
+        if (this.faseAtual === 4 && !this.isBossFight) {
+          this.startBossFight();
+        }
       }
   
       for (let i = this.fishes.length - 1; i >= 0; i--) {
@@ -370,13 +421,16 @@ export class Game {
       }
   
       if (p.frameCount >= this.nextWhaleSpawn) {
-        this.whales.push(new Whale(
-          this.whaleImage,
-          p.width,
-          p.random(50, p.height - 50),
-          p.random(BASE_FISH_SPEED_MIN, BASE_FISH_SPEED_MAX) * this.currentSpeedMultiplier * WHALE_SPEED_MULTIPLIER,
-          WHALE_SIZE
-        ));
+        // Parar spawn de baleias na fase 4
+        if (!this.isBossFight) {
+          this.whales.push(new Whale(
+            this.whaleImage,
+            p.width,
+            p.random(50, p.height - 50),
+            p.random(BASE_FISH_SPEED_MIN, BASE_FISH_SPEED_MAX) * this.currentSpeedMultiplier * WHALE_SPEED_MULTIPLIER,
+            WHALE_SIZE
+          ));
+        }
         this.nextWhaleSpawn = p.frameCount + p.int(p.random(WHALE_MIN_INTERVAL, WHALE_MAX_INTERVAL) * 60);
       }
   
@@ -388,6 +442,56 @@ export class Game {
           continue;
         }
         if (whale.isOffscreen()) this.whales.splice(i, 1);
+      }
+
+      // Lógica do boss final - só executar se não estiver em vitória
+      if (this.isBossFight && this.finalBoss && !this.victory) {
+        this.finalBoss.update(p);
+        this.finalBoss.draw(p);
+        
+        // Verificar colisão com o boss
+        if (this.finalBoss.checkPlayerCollision(this.player)) {
+          this.vidas--;
+          this.emitirSomDano();
+          this.piscarVidaFrames = 15;
+          if (this.vidas <= 0) {
+            this.player.startDeath();
+          }
+        }
+        
+        // Verificar colisão com bolhas do boss
+        if (this.finalBoss.checkBossBubbleCollision(this.player)) {
+          this.vidas--;
+          this.emitirSomDano();
+          this.piscarVidaFrames = 15;
+          if (this.vidas <= 0) {
+            this.player.startDeath();
+          }
+        }
+        
+        // Atualizar e desenhar bolhas do jogador
+        for (let i = this.playerBubbles.length - 1; i >= 0; i--) {
+          const bubble = this.playerBubbles[i];
+          bubble.update();
+          bubble.draw(p);
+          
+          // Verificar colisão com o boss
+          if (this.checkPlayerBubbleBossCollision(bubble)) {
+            this.playerBubbles.splice(i, 1);
+            this.finalBoss.takeDamage();
+            this.emitirSomBolha(50);
+            
+            // Verificar se o boss morreu
+            if (this.finalBoss.isDead) {
+              this.bossDefeated();
+            }
+            continue;
+          }
+          
+          if (bubble.isOffscreen(p)) {
+            this.playerBubbles.splice(i, 1);
+          }
+        }
       }
     }
   
@@ -498,6 +602,66 @@ export class Game {
       source.start(0);
     }
   
+    startBossFight() {
+      this.isBossFight = true;
+      this.bossMessageStartTime = this.p.millis(); // Definir tempo de início da mensagem
+      this.finalBoss = new FinalBoss(
+        this.bossFinalImage,
+        this.bossBubbleImage,
+        this.p.width - 200,
+        this.p.height / 2 - 200
+      );
+      
+      // Dar 100 bolhas ao jogador se não tiver
+      if (this.pontuacao < 100) {
+        this.pontuacao = 100;
+      }
+    }
+
+    spawnPlayerBubble() {
+      if (!this.isBossFight || this.pontuacao <= 0) return;
+      
+      const currentTime = this.p.millis();
+      if (currentTime - this.lastPlayerBubbleSpawn < this.playerBubbleCooldown) return;
+      
+      this.playerBubbles.push(new PlayerBubble(
+        this.bubbleImage,
+        this.player.x + 100,
+        this.player.y + 50,
+        8, // velocidade
+        50 // tamanho
+      ));
+      
+      this.pontuacao--;
+      this.lastPlayerBubbleSpawn = currentTime;
+    }
+
+    checkPlayerBubbleBossCollision(bubble) {
+      if (!this.finalBoss || this.finalBoss.isDead) return false;
+      
+      const p = this.p;
+      const bubbleCenterX = bubble.x + bubble.size / 2;
+      const bubbleCenterY = bubble.y + bubble.size / 2;
+      const bossCenterX = this.finalBoss.x + this.finalBoss.size / 2;
+      const bossCenterY = this.finalBoss.y + this.finalBoss.size / 2;
+      
+      const distance = p.dist(bubbleCenterX, bubbleCenterY, bossCenterX, bossCenterY);
+      const collisionRadius = this.finalBoss.size / 2;
+      
+      return distance < collisionRadius;
+    }
+
+    bossDefeated() {
+      this.isBossFight = false;
+      this.finalBoss = null;
+      this.playerBubbles = [];
+      this.victory = true;
+      // Adicionar pontuação extra por derrotar o boss
+      this.pontuacao += 500;
+      // Criar efeito de bolhas de vitória
+      this.createBurstEffect();
+    }
+  
     spawnMenuBubble(fromBottom = true) {
       const p = this.p;
       const size = p.random(MIN_BUBBLE_SIZE, MAX_BUBBLE_SIZE);
@@ -531,6 +695,8 @@ export class Game {
       this.player.reset(p.height / 2 - 50);
       this.gameOver = false;
       this.gameStarted = false;
+      this.victory = false;
+      this.victorySoundPlayed = false;
       this.vidas = MAX_VIDAS;
       this.piscarVidaFrames = 0;
       this.pontuacao = 0;
@@ -538,6 +704,7 @@ export class Game {
       this.lastSpeedIncreaseTime = p.millis();
       this.nextWhaleSpawn = p.frameCount + p.int(p.random(WHALE_MIN_INTERVAL, WHALE_MAX_INTERVAL) * 60);
       this.ui.hideRestart();
+      this.ui.hidePlayAgain();
       this.ui.showStartAbout();
       p.loop();
       this.menuBubbles = [];
@@ -547,5 +714,85 @@ export class Game {
       this.tempoMensagemFase = 0;
       this.showAbout = false;
       this.gameOverSoundPlayed = false;
+      this.isBossFight = false;
+      this.finalBoss = null;
+      this.playerBubbles = [];
+      this.bossMessageStartTime = 0;
+    }
+
+    testBossMode() {
+      // Pular direto para a fase 4
+      this.faseAtual = 4;
+      this.pontuacao = 100;
+      this.vidas = MAX_VIDAS;
+      this.currentSpeedMultiplier = 1 + (this.faseAtual - 1) * SPEED_INCREASE_AMOUNT;
+      
+      // Iniciar o jogo
+      this.gameStarted = true;
+      this.gameStartTime = this.p.millis();
+      
+      // Esconder botões
+      this.ui.startButton.hide();
+      this.ui.aboutButton.hide();
+      this.ui.testBossButton.hide();
+      this.ui.hidePlayAgain();
+      
+      // Limpar menu bubbles
+      this.menuBubbles = [];
+      
+      // Iniciar boss fight imediatamente
+      this.startBossFight();
+    }
+
+    showVictoryScreen(p) {
+      // Gerar bolhas de vitória continuamente
+      if (p.frameCount % 30 === 0) { // A cada 30 frames (0.5 segundos a 60fps)
+        this.spawnMenuBubble(false);
+      }
+      
+      // Atualizar e desenhar as bolhas
+      this.updateMenuBubbles();
+
+      // Mensagem de vitória sem fundo
+      p.push();
+      p.textAlign(p.CENTER, p.CENTER);
+      p.textSize(48);
+      p.fill(255, 255, 0);
+      p.text('🎉 VITÓRIA! 🎉', p.width / 2, p.height / 2 - 100);
+      
+      p.textSize(24);
+      p.fill(255);
+      p.text('Parabéns! Você derrotou o espigão do mal', p.width / 2, p.height / 2 - 40);
+      p.text('e ajudou os mares!', p.width / 2, p.height / 2 - 10);
+      
+      p.textSize(20);
+      p.fill(255, 255, 0);
+      p.text(`Pontuação final: ${this.pontuacao}`, p.width / 2, p.height / 2 + 30);
+      p.pop();
+
+      // Mostrar botão "Jogar Novamente"
+      this.ui.showPlayAgain(p);
     }
   }
+
+class PlayerBubble {
+  constructor(img, x, y, speed, size) {
+    this.img = img;
+    this.x = x;
+    this.y = y;
+    this.speed = speed;
+    this.size = size;
+  }
+
+  update() {
+    this.x += this.speed;
+  }
+
+  draw(p) {
+    p.image(this.img, this.x, this.y, this.size, this.size);
+  }
+
+  isOffscreen(p) {
+    return this.x > p.width;
+  }
+}

@@ -203,7 +203,7 @@ export class Game {
     
           // Texto da descrição com espaçamento, alinhamento e destaque
           p.fill(30);
-          p.textSize(15);
+          p.textSize(14);
           p.textAlign(p.LEFT, p.TOP);
           const padding = 48;
           const textX = cardX + padding;
@@ -243,7 +243,7 @@ export class Game {
             }
           }
     
-          drawMultilineText(p, description, textX, textY, textWidth, 28);
+          drawMultilineText(p, description, textX, textY, textWidth, 24);
     
           // Desenvolvedores no rodapé do card
           p.textAlign(p.CENTER, p.BOTTOM);

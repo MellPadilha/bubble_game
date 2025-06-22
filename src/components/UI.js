@@ -10,7 +10,7 @@ export class UI {
   
     createButtons(p, onStart, onAbout, onBack, onRestart, onPlayAgain) {
       this.startButton = p.createButton('Iniciar');
-      this.startButton.position(p.width / 2 - 200, p.height / 2 + 50);
+      this.startButton.position(p.width / 2 - 100, p.height / 2 + 50);
       this.startButton.style('background-color', '#0066cc');
       this.startButton.style('color', 'white');
       this.startButton.style('border', 'none');
@@ -21,7 +21,7 @@ export class UI {
       this.startButton.mousePressed(onStart);
   
       this.aboutButton = p.createButton('Sobre');
-      this.aboutButton.position(p.width / 2 + 100, p.height / 2 + 50);
+      this.aboutButton.position(p.width / 2 - 100, p.height / 2 + 120);
       this.aboutButton.style('background-color', '#888');
       this.aboutButton.style('color', 'white');
       this.aboutButton.style('border', 'none');

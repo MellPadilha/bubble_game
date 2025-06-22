@@ -19,6 +19,14 @@ export function createSketch(p) {
     if (!game) return; // Garante que o objeto foi criado
     if (!game.gameStarted || game.gameOver) return;
     
+    if (p.key === 'f' || p.key === 'F') {
+      // Atirar bolha no boss
+      if (game.isBossFight) {
+        game.spawnPlayerBubble();
+      }
+      return;
+    }
+    
     if (!game.player.isMoving) {
       game.player.isMoving = true;
       game.player.img = game.characterImages[0];

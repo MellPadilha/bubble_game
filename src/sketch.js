@@ -9,6 +9,7 @@ export function createSketch(p) {
     game = new Game(p);
     await game.preload();
     game.setupUI();
+    game.ui.showStartAbout();
   };
 
   p.draw = () => {

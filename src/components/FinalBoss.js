@@ -11,10 +11,31 @@ export class FinalBoss {
     this.direction = 1; 
     this.bossBubbles = [];
     this.lastBubbleSpawn = 0;
-    this.bubbleSpawnInterval = 2000;
+    this.bubbleSpawnInterval = 2000; // Intervalo para ataques aleatórios
     this.isDead = false;
     this.deathAnimation = false;
     this.deathTimer = 0;
+    
+    // Sistema de rajadas
+    this.lastBurstTime = 0;
+    this.burstInterval = 45000; // 45 segundos
+    this.isBursting = false;
+    this.burstBubbleCount = 0;
+    this.maxBurstBubbles = 8; // Número de bolhas na rajada
+    this.burstBubbleDelay = 200; // Delay entre bolhas na rajada
+    this.lastBurstBubbleTime = 0;
+    
+    // Sistema de ataques aleatórios
+    this.lastRandomAttackTime = 0;
+    this.randomAttackInterval = 2000; // 2 segundos entre ataques aleatórios (mais frequente)
+    this.randomAttackChance = 0.5; // 50% de chance de atacar a cada intervalo (mais agressivo)
+    
+    // Sistema de ataques em grupo
+    this.isGroupAttacking = false;
+    this.groupAttackCount = 0;
+    this.maxGroupAttackCount = 0;
+    this.lastGroupAttackTime = 0;
+    this.groupAttackDelay = 120; // 120ms entre bolhas do grupo (mais rápido)
   }
 
   update(p) {
@@ -26,9 +47,60 @@ export class FinalBoss {
     this.y += Math.sin(p.frameCount * 0.02) * 0.5;
     
     const currentTime = p.millis();
-    if (currentTime - this.lastBubbleSpawn > this.bubbleSpawnInterval) {
-      this.spawnBossBubble(p);
-      this.lastBubbleSpawn = currentTime;
+    
+    // Sistema de rajadas a cada 45 segundos
+    if (!this.isBursting && !this.isGroupAttacking && currentTime - this.lastBurstTime > this.burstInterval) {
+      this.isBursting = true;
+      this.burstBubbleCount = 0;
+      this.lastBurstBubbleTime = currentTime;
+    }
+    
+    // Spawn de bolhas durante a rajada
+    if (this.isBursting) {
+      if (currentTime - this.lastBurstBubbleTime > this.burstBubbleDelay && this.burstBubbleCount < this.maxBurstBubbles) {
+        this.spawnBossBubble(p, true); // true = rajada
+        this.burstBubbleCount++;
+        this.lastBurstBubbleTime = currentTime;
+        
+        // Finalizar rajada quando todas as bolhas foram spawnadas
+        if (this.burstBubbleCount >= this.maxBurstBubbles) {
+          this.isBursting = false;
+          this.lastBurstTime = currentTime;
+        }
+      }
+    }
+    
+    // Sistema de ataques em grupo
+    if (this.isGroupAttacking) {
+      if (currentTime - this.lastGroupAttackTime > this.groupAttackDelay && this.groupAttackCount < this.maxGroupAttackCount) {
+        this.spawnBossBubble(p, false);
+        this.groupAttackCount++;
+        this.lastGroupAttackTime = currentTime;
+        
+        // Finalizar ataque em grupo
+        if (this.groupAttackCount >= this.maxGroupAttackCount) {
+          this.isGroupAttacking = false;
+        }
+      }
+    }
+    
+    // Sistema de ataques aleatórios
+    if (!this.isBursting && !this.isGroupAttacking && currentTime - this.lastRandomAttackTime > this.randomAttackInterval) {
+      if (p.random() < this.randomAttackChance) {
+        // Decidir se vai atacar com uma bolha ou um grupo pequeno
+        const attackType = p.random();
+        if (attackType < 0.6) {
+          // 60% de chance: ataque com uma bolha
+          this.spawnBossBubble(p, false);
+        } else {
+          // 40% de chance: ataque com grupo pequeno (2-4 bolhas)
+          this.isGroupAttacking = true;
+          this.groupAttackCount = 0;
+          this.maxGroupAttackCount = p.int(p.random(2, 5));
+          this.lastGroupAttackTime = currentTime;
+        }
+      }
+      this.lastRandomAttackTime = currentTime;
     }
 
     for (let i = this.bossBubbles.length - 1; i >= 0; i--) {
@@ -52,6 +124,28 @@ export class FinalBoss {
     p.image(this.img, this.x, this.y, this.size, this.size);
 
     this.drawHealthBar(p);
+    
+    // Indicador de rajada
+    if (this.isBursting) {
+      p.push();
+      p.fill(255, 0, 0, 150);
+      p.noStroke();
+      p.textAlign(p.CENTER, p.CENTER);
+      p.textSize(24);
+      p.text("RAJADA!", this.x + this.size / 2, this.y - 60);
+      p.pop();
+    }
+    
+    // Indicador de ataque em grupo
+    if (this.isGroupAttacking) {
+      p.push();
+      p.fill(255, 165, 0, 150); // Laranja
+      p.noStroke();
+      p.textAlign(p.CENTER, p.CENTER);
+      p.textSize(20);
+      p.text("ATAQUE EM GRUPO!", this.x + this.size / 2, this.y - 60);
+      p.pop();
+    }
 
     for (const bubble of this.bossBubbles) {
       bubble.draw(p);
@@ -78,10 +172,21 @@ export class FinalBoss {
     p.noStroke();
   }
 
-  spawnBossBubble(p) {
+  spawnBossBubble(p, isRajada = false) {
     const bubbleSize = 60;
     const speed = 3;
-    const angle = p.random(-Math.PI/4, Math.PI/4);
+    
+    // Padrão de rajada: bolhas em diferentes ângulos
+    let angle;
+    if (isRajada) {
+      // Durante rajada, distribuir bolhas em um arco maior
+      const angleStep = (Math.PI / 2) / (this.maxBurstBubbles - 1);
+      angle = -Math.PI/4 + (this.burstBubbleCount * angleStep);
+    } else {
+      // Ataque aleatório: ângulo aleatório em um arco menor
+      angle = p.random(-Math.PI/6, Math.PI/6); // Arco menor para ataques aleatórios
+    }
+    
     const vx = -speed * Math.cos(angle);
     const vy = speed * Math.sin(angle);
     

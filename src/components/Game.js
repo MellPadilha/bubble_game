@@ -67,6 +67,11 @@ export class Game {
       this.ui = new UI();
       this.showAbout = false;
       this.gameOverSoundPlayed = false;
+      this.contagemRegressiva = false;
+    this.valorContagem = 3;
+    this.tempoContagem = 0;
+    this.tempoGo = 0;
+
     }
   
     async preload() {
@@ -99,15 +104,15 @@ export class Game {
       this.ui.createButtons(
         this.p,
         () => { // onStart
-          this.createBurstEffect();
-          setTimeout(() => {
-            this.gameStarted = true;
-            this.gameStartTime = this.p.millis();
+            this.createBurstEffect();
+            this.contagemRegressiva = true;
+            this.valorContagem = 3;
+            this.tempoContagem = this.p.millis();
             this.ui.startButton.hide();
             this.ui.aboutButton.hide();
             this.menuBubbles = [];
-          }, 1000);
-        },
+          },
+          
         () => { // onAbout
           this.showAbout = true;
           this.ui.showBack();
@@ -125,6 +130,44 @@ export class Game {
     draw() {
       const p = this.p;
       p.clear();
+
+      if (this.contagemRegressiva) {
+        const tempoAtual = this.p.millis();
+        const tempoDecorrido = tempoAtual - this.tempoContagem;
+      
+        if (this.valorContagem > 0) {
+          if (tempoDecorrido > 1000) {
+            this.valorContagem--;
+            this.tempoContagem = tempoAtual;
+          }
+      
+          this.p.push();
+          this.p.fill(255);
+          this.p.textAlign(this.p.CENTER, this.p.CENTER);
+          this.p.textSize(120);
+          this.p.text(this.valorContagem, this.p.width / 2, this.p.height / 2);
+          this.p.pop();
+          return;
+        } else if (this.tempoGo === 0) {
+          this.tempoGo = tempoAtual;
+        }
+      
+        if (tempoAtual - this.tempoGo < 1000) {
+          this.p.push();
+          this.p.fill(255, 255, 0);
+          this.p.textAlign(this.p.CENTER, this.p.CENTER);
+          this.p.textSize(100);
+          this.p.text("GO!", this.p.width / 2, this.p.height / 2);
+          this.p.pop();
+          return;
+        }
+      
+        this.contagemRegressiva = false;
+        this.tempoGo = 0;
+        this.gameStarted = true;
+        this.gameStartTime = this.p.millis();
+      }
+      
     
       if (!this.gameStarted) {
         if (this.showAbout) {
@@ -136,7 +179,7 @@ export class Game {
     
           // Card centralizado com sombra
           const cardWidth = p.width * 0.7;
-          const cardHeight = p.height * 0.7;
+          const cardHeight = Math.min(p.height * 0.9, 700);
           const cardX = (p.width - cardWidth) / 2;
           const cardY = (p.height - cardHeight) / 2;
     
@@ -160,7 +203,7 @@ export class Game {
     
           // Texto da descrição com espaçamento, alinhamento e destaque
           p.fill(30);
-          p.textSize(20);
+          p.textSize(15);
           p.textAlign(p.LEFT, p.TOP);
           const padding = 48;
           const textX = cardX + padding;
@@ -168,12 +211,13 @@ export class Game {
           const textWidth = cardWidth - 2 * padding;
     
           const description =
-            "🫧 **Uma aventura subaquática cheia de desafios e magia!**\n\n" +
+            "🫧 **Uma aventura subaquática cheia de desafios e magia!**\n" +
             "Você está pronto para mergulhar em um mundo onde cada bolha pode ser a diferença entre a vitória e o fracasso? " +
-            "Em *Bubble Game*, você assume o papel de **Bubbly**, um destemido explorador dos sete mares, em busca das lendárias Bolhas de Luz — bolhas mágicas que, segundo a lenda, concedem sorte e alegria a quem as coleta.\n\n" +
-            "⚠️ **Mas cuidado!** As águas estão repletas de peixes travessos e baleias gigantes, guardiões naturais desse tesouro submerso. Eles farão de tudo para impedir que você alcance seu objetivo. Com reflexos rápidos, coragem e um pouco de estratégia, você precisa desviar dos perigos, coletar o máximo de bolhas possível e provar que é o verdadeiro mestre dos oceanos!\n\n" +
-            "💨 Cada fase traz novos desafios e aumenta a velocidade da correnteza, testando seus limites e sua habilidade de sobreviver nas profundezas. O mar é lindo, mas só os mais habilidosos conseguem chegar ao topo do placar!\n\n" +
-            "✨ Entre nessa jornada mágica, desafie seus amigos, bata recordes e descubra até onde você consegue ir nesse universo de bolhas, cores e emoção!\n\n" +
+            "Em *Bubble Game*, você assume o papel de **Bubbly**, um destemido explorador dos sete mares, em busca das lendárias Bolhas de Luz — bolhas mágicas que, segundo a lenda, concedem sorte e alegria a quem as coleta.\n" +
+            "⚠️ **Mas cuidado!** As águas estão repletas de peixes travessos e baleias gigantes, guardiões naturais desse tesouro submerso. Eles farão de tudo para impedir que você alcance seu objetivo. Com reflexos rápidos, "+
+            "coragem e um pouco de estratégia, você precisa desviar dos perigos, coletar o máximo de bolhas possível e provar que é o verdadeiro mestre dos oceanos!\n" +
+            "💨 Cada fase traz novos desafios e aumenta a velocidade da correnteza, testando seus limites e sua habilidade de sobreviver nas profundezas. O mar é lindo, mas só os mais habilidosos conseguem chegar ao topo do placar!\n" +
+            "✨ Entre nessa jornada mágica, desafie seus amigos, bata recordes e descubra até onde você consegue ir nesse universo de bolhas, cores e emoção!\n" +
             "🫧 **Prepare-se: as bolhas estão esperando por você. O oceano nunca foi tão divertido!**";
     
           // Função para desenhar texto multiline (quebra automática)
@@ -203,12 +247,12 @@ export class Game {
     
           // Desenvolvedores no rodapé do card
           p.textAlign(p.CENTER, p.BOTTOM);
-          p.textSize(16);
+          p.textSize(20);
           p.fill(80, 80, 80);
           p.text(
             'Desenvolvedores: Johnny Carvalho - Mellanie Taveira - Rafael Giroldo - Vinícius Kuchnir',
             p.width / 2,
-            cardY + cardHeight - 28
+            cardY + cardHeight - 78
           );
     
           p.pop();

@@ -1,0 +1,17 @@
+export const SPEED_INCREASE_INTERVAL = 30;
+export const SPEED_INCREASE_AMOUNT = 1;
+export const MIN_BUBBLE_SIZE = 30;
+export const MAX_BUBBLE_SIZE = 50;
+export const MIN_VOLUME = 0.2;
+export const MAX_VOLUME = 1.0;
+export const MAX_VIDAS = 5;
+export const BASE_FISH_SPEED_MIN = 1;
+export const BASE_FISH_SPEED_MAX = 2.5;
+export const WHALE_MIN_INTERVAL = 15;
+export const WHALE_MAX_INTERVAL = 30;
+export const WHALE_SIZE = 120;
+export const WHALE_SPEED_MULTIPLIER = 0.8;
+export const MENU_BUBBLE_SPAWN_RATE = 30;
+export const BURST_BUBBLE_COUNT = 30;
+export const INITIAL_SPAWN_DELAY = 3000;
+export const DURACAO_MENSAGEM_FASE = 2000;

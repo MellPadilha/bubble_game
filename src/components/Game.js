@@ -282,10 +282,17 @@ export class Game {
         }
     
         // Tela inicial padrão
-        const logoWidth = 500;
-        const logoHeight = 500;
-        p.image(this.gameLogo, p.width / 2 - logoWidth / 2, p.height / 2 - logoHeight - 150, logoWidth, logoHeight);
-    
+        const base       = Math.min(p.width, p.height);
+        const logoWidth  = base * 0.60;
+        const logoHeight = logoWidth;
+        p.push();
+        p.imageMode(p.CENTER);
+        p.image(this.gameLogo,
+                p.width  / 2,
+                p.height / 2 - 60 * 3,
+                logoWidth, logoHeight);
+        p.pop();
+
         if (p.frameCount % MENU_BUBBLE_SPAWN_RATE === 0) {
           this.spawnMenuBubble();
         }

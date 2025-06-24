@@ -6,6 +6,23 @@
 
 ---
 
+## 🎥 Vídeo de Apresentação
+
+> **Duração:** 8 minutos  
+> **Integrantes:** Johnny Carvalho · Mellanie Taveira · Rafael Giroldo · Vinícius Kuchnir
+
+No vídeo abaixo explicamos:
+
+1. **História do jogo** – O enredo do jogo.  
+2. **Jogabilidade** – principais mecânicas, controles (`W A S D`, coleta de bolhas, desvio de inimigos, boss final).  
+3. **Arquitetura do código** – visão geral dos módulos (`Player`, `Fish`, `Bubble`, etc.) e padrões adotados.
+
+### ▶️ Assista aqui
+
+[![Clique para assistir](https://img.youtube.com/vi/VIDEO_ID/hqdefault.jpg)](https://youtu.be/OlCEI2HwRFs)
+
+---
+
 ## 🎮 Como Jogar
 
 - **Colete bolhas** para ganhar pontos!
@@ -23,6 +40,7 @@
 | S     | Mover para baixo   |
 | A     | Mover para a esquerda |
 | D     | Mover para a direita  |
+| F     | Soltar bolhas (**Apenas no boss final**)  |
 
 - Use o mouse para clicar nos botões **Iniciar**, **Sobre** e **Restart**.
 
